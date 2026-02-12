@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.eclipse/
+.project
+.classpath
+.settings/
+
+# paperweight generated directories
+paper-api/
+paper-server/
+.paper/
+run/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+*.local
+
+# Claude
+CLAUDE.md
