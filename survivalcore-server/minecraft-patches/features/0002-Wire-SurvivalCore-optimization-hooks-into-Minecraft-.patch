@@ -1,0 +1,198 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: JadenRazo <jadenrazo@yahoo.com>
+Date: Thu, 12 Feb 2026 19:47:03 +0000
+Subject: [PATCH] Wire SurvivalCore optimization hooks into Minecraft classes
+
+- PathNavigation: async pathfinding with CompletableFuture dispatch
+- HopperBlockEntity: inventory caching skip-checks for push/pull
+- Mob: distance-based AI tick frequency throttling
+- Villager: lobotomize check for unreachable job sites/beds
+- NaturalSpawner: performance monitoring instrumentation
+
+diff --git a/net/minecraft/world/entity/Mob.java b/net/minecraft/world/entity/Mob.java
+index e0b3cb2b2694768803ed347a1026b881fd624951..54130ea4600af50c8c58718d13f49c8b032c17f6 100644
+--- a/net/minecraft/world/entity/Mob.java
++++ b/net/minecraft/world/entity/Mob.java
+@@ -759,6 +759,23 @@ public abstract class Mob extends LivingEntity implements EquipmentUser, Leashab
+         this.sensing.tick();
+         profilerFiller.pop();
+         int i = this.tickCount + this.getId();
++        // SurvivalCore start - Distance-based AI tick frequency
++        boolean survivalcoreSkipAI = false;
++        if (net.survivalcore.config.SurvivalCoreConfig.get().entityAiDistanceBasedTickFrequency) {
++            net.minecraft.world.entity.player.Player nearestPlayer = this.level().getNearestPlayer(this, -1.0);
++            double distSq = nearestPlayer != null ? this.distanceToSqr(nearestPlayer) : Double.MAX_VALUE;
++            survivalcoreSkipAI = !net.survivalcore.async.EntityAIOptimizer.shouldTickAI(distSq, this.tickCount, this.getId());
++        }
++        if (survivalcoreSkipAI) {
++            // Still tick running goals at reduced rate so mobs don't freeze mid-action
++            profilerFiller.push("targetSelector");
++            this.targetSelector.tickRunningGoals(false);
++            profilerFiller.pop();
++            profilerFiller.push("goalSelector");
++            this.goalSelector.tickRunningGoals(false);
++            profilerFiller.pop();
++        } else
++        // SurvivalCore end
+         if (i % 2 != 0 && this.tickCount > 1) {
+             profilerFiller.push("targetSelector");
+             this.targetSelector.tickRunningGoals(false);
+diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+index dd1a95111d965bcd7f53be9d4224dd213e4e0705..87bb326006a9709fc4f79a3a09b2919bfe4c6ba0 100644
+--- a/net/minecraft/world/entity/ai/navigation/PathNavigation.java
++++ b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+@@ -55,6 +55,11 @@ public abstract class PathNavigation {
+     public final PathFinder pathFinder;
+     private boolean isStuck;
+     private float requiredPathLength = 16.0F;
++    // SurvivalCore start - Async pathfinding
++    @Nullable
++    private java.util.concurrent.CompletableFuture<Path> pendingPathFuture;
++    private double pendingPathSpeed;
++    // SurvivalCore end
+ 
+     public PathNavigation(Mob mob, Level level) {
+         this.mob = mob;
+@@ -194,6 +199,19 @@ public abstract class PathNavigation {
+             BlockPos blockPos = offsetUpward ? this.mob.blockPosition().above() : this.mob.blockPosition();
+             int i = (int)(followRange + regionOffset);
+             PathNavigationRegion pathNavigationRegion = new PathNavigationRegion(this.level, blockPos.offset(-i, -i, -i), blockPos.offset(i, i, i));
++            // SurvivalCore start - Async pathfinding
++            if (net.survivalcore.async.AsyncPathfinder.isEnabled()) {
++                final Set<BlockPos> finalTargets = targets;
++                final float finalFollowRange = followRange;
++                final int finalAccuracy = accuracy;
++                final float maxNodes = this.maxVisitedNodesMultiplier;
++                this.pendingPathFuture = net.survivalcore.async.AsyncPathfinder.get().submit(
++                    () -> this.pathFinder.findPath(pathNavigationRegion, this.mob, finalTargets, finalFollowRange, finalAccuracy, maxNodes)
++                );
++                profilerFiller.pop();
++                return null;
++            }
++            // SurvivalCore end
+             Path path = this.pathFinder.findPath(pathNavigationRegion, this.mob, targets, followRange, accuracy, this.maxVisitedNodesMultiplier);
+             profilerFiller.pop();
+             if (path != null && path.getTarget() != null) {
+@@ -272,6 +290,21 @@ public abstract class PathNavigation {
+ 
+     public void tick() {
+         this.tick++;
++        // SurvivalCore start - Check for async pathfinding result
++        if (this.pendingPathFuture != null && this.pendingPathFuture.isDone()) {
++            try {
++                Path asyncPath = this.pendingPathFuture.join();
++                if (asyncPath != null && asyncPath.getTarget() != null) {
++                    this.targetPos = asyncPath.getTarget();
++                    this.path = asyncPath;
++                    this.resetStuckTimeout();
++                }
++            } catch (Exception ignored) {
++                // Async computation failed; mob just keeps current path
++            }
++            this.pendingPathFuture = null;
++        }
++        // SurvivalCore end
+         if (this.hasDelayedRecomputation) {
+             this.recomputePath();
+         }
+diff --git a/net/minecraft/world/entity/npc/Villager.java b/net/minecraft/world/entity/npc/Villager.java
+index e1e2bdb35866a8f32a41f6efd24ad77cf916b2e9..e5c5abaa5f6c56ef015fba7964200fcf9f6d3c65 100644
+--- a/net/minecraft/world/entity/npc/Villager.java
++++ b/net/minecraft/world/entity/npc/Villager.java
+@@ -125,6 +125,7 @@ public class Villager extends AbstractVillager implements ReputationEventHandler
+     public int numberOfRestocksToday = 0;
+     private long lastRestockCheckDayTime;
+     private boolean assignProfessionWhenSpawned = false;
++    private boolean survivalcoreLobotomized = false; // SurvivalCore - villager lobotomize
+     private static final ImmutableList<MemoryModuleType<?>> MEMORY_TYPES = ImmutableList.of(
+         MemoryModuleType.HOME,
+         MemoryModuleType.JOB_SITE,
+@@ -294,9 +295,18 @@ public class Villager extends AbstractVillager implements ReputationEventHandler
+     }
+     protected void customServerAiStep(ServerLevel level, final boolean inactive) {
+         // Paper end - EAR 2
++        // SurvivalCore start - Villager lobotomize
++        if (!inactive && net.survivalcore.async.VillagerLobotomize.shouldCheck(this.tickCount, this.getId())) {
++            boolean hasJobSite = this.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.JOB_SITE).isPresent()
++                && this.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.JOB_SITE).get().pos().closerToCenterThan(this.position(), 64.0);
++            boolean hasBed = this.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.HOME).isPresent()
++                && this.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.HOME).get().pos().closerToCenterThan(this.position(), 64.0);
++            this.survivalcoreLobotomized = net.survivalcore.async.VillagerLobotomize.shouldLobotomize(hasJobSite, hasBed, this.isTrading());
++        }
++        // SurvivalCore end
+         ProfilerFiller profilerFiller = Profiler.get();
+         profilerFiller.push("villagerBrain");
+-        if (!inactive) this.getBrain().tick(level, this); // Paper - EAR 2
++        if (!inactive && !this.survivalcoreLobotomized) this.getBrain().tick(level, this); // Paper - EAR 2 // SurvivalCore - skip brain tick for lobotomized
+         profilerFiller.pop();
+         if (this.assignProfessionWhenSpawned) {
+             this.assignProfessionWhenSpawned = false;
+diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
+index 4f647507d06d45a65b4b1793219d90c65e110225..26309766ccb8cb066035edfd688cd7dd5b29e1a8 100644
+--- a/net/minecraft/world/level/NaturalSpawner.java
++++ b/net/minecraft/world/level/NaturalSpawner.java
+@@ -213,10 +213,21 @@ public final class NaturalSpawner {
+         MobCategory category, ServerLevel level, LevelChunk chunk, NaturalSpawner.SpawnPredicate filter, NaturalSpawner.AfterSpawnCallback callback, final int maxSpawns, final Consumer<Entity> trackEntity
+     ) {
+         // Paper end - Optional per player mob spawns
++        // SurvivalCore start - Performance monitoring for mob spawning
++        long survivalcoreSpawnStart = 0;
++        if (net.survivalcore.monitoring.PerformanceMonitor.isEnabled()) {
++            survivalcoreSpawnStart = System.nanoTime();
++        }
++        // SurvivalCore end
+         BlockPos randomPosWithin = getRandomPosWithin(level, chunk);
+         if (randomPosWithin.getY() >= level.getMinY() + 1) {
+             spawnCategoryForPosition(category, level, chunk, randomPosWithin, filter, callback, maxSpawns, trackEntity); // Paper - Optional per player mob spawns
+         }
++        // SurvivalCore start - Record mob spawning timing
++        if (net.survivalcore.monitoring.PerformanceMonitor.isEnabled()) {
++            net.survivalcore.monitoring.PerformanceMonitor.get().record("mob_spawning", System.nanoTime() - survivalcoreSpawnStart);
++        }
++        // SurvivalCore end
+     }
+ 
+     @VisibleForDebug
+diff --git a/net/minecraft/world/level/block/entity/HopperBlockEntity.java b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
+index 01ed25d1f895d94485b5fecd98476534cbb26930..767d285b966a06d5968b16d5c36188d3ef8e06d4 100644
+--- a/net/minecraft/world/level/block/entity/HopperBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
+@@ -187,15 +187,36 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+             if (!blockEntity.isOnCooldown() && state.getValue(HopperBlock.ENABLED)) {
+                 boolean flag = false;
+                 final int fullState = getFullState(blockEntity); // Paper - Perf: Optimize Hoppers
++                // SurvivalCore start - Hopper optimization caching
++                final long hopperKey = pos.asLong();
++                // SurvivalCore end
+                 if (fullState != HOPPER_EMPTY) { // Paper - Perf: Optimize Hoppers
+-                    flag = ejectItems(level, pos, blockEntity);
++                    // SurvivalCore start - Skip push if destination is known full
++                    if (!net.survivalcore.async.HopperOptimizer.shouldSkipPush(hopperKey)) {
++                        flag = ejectItems(level, pos, blockEntity);
++                        if (!flag) {
++                            net.survivalcore.async.HopperOptimizer.markDestFull(hopperKey);
++                        }
++                    }
++                    // SurvivalCore end
+                 }
+ 
+                 if (fullState != HOPPER_IS_FULL || flag) { // Paper - Perf: Optimize Hoppers
+-                    flag |= validator.getAsBoolean(); // Paper - note: this is not a validator, it's what adds/sucks in items
++                    // SurvivalCore start - Skip pull if source is known empty
++                    if (!net.survivalcore.async.HopperOptimizer.shouldSkipPull(hopperKey)) {
++                        boolean pulled = validator.getAsBoolean();
++                        flag |= pulled;
++                        if (!pulled) {
++                            net.survivalcore.async.HopperOptimizer.markSourceEmpty(hopperKey);
++                        }
++                    }
++                    // SurvivalCore end
+                 }
+ 
+                 if (flag) {
++                    // SurvivalCore start - Invalidate cache on successful transfer
++                    net.survivalcore.async.HopperOptimizer.onContainerChanged(hopperKey);
++                    // SurvivalCore end
+                     blockEntity.setCooldown(level.spigotConfig.hopperTransfer); // Spigot
+                     setChanged(level, pos, state);
+                     return true;

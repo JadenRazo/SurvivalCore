@@ -15,6 +15,10 @@ build/
 # paperweight generated directories
 paper-api/
 paper-server/
+survivalcore-api/build.gradle.kts
+survivalcore-api/src/
+survivalcore-server/build.gradle.kts
+survivalcore-server/src/
 .paper/
 run/
 
