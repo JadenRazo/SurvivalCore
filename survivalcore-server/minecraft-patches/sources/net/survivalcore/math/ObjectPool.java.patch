@@ -1,0 +1,98 @@
+--- /dev/null
++++ b/net/survivalcore/math/ObjectPool.java
+@@ -1,0 +_,95 @@
++package net.survivalcore.math;
++
++import java.util.ArrayDeque;
++import java.util.Deque;
++import java.util.function.Consumer;
++import java.util.function.Supplier;
++
++/**
++ * Thread-local object pool for short-lived hot-path objects.
++ *
++ * Reduces GC pressure by reusing BlockPos, Vec3, AABB instances
++ * instead of allocating new ones each tick. Each thread maintains
++ * its own pool to avoid synchronization overhead.
++ *
++ * Falls back to creating new instances when the pool is exhausted.
++ *
++ * @param <T> the pooled object type
++ */
++public final class ObjectPool<T> {
++
++    private final ThreadLocal<Deque<T>> pool;
++    private final Supplier<T> factory;
++    private final Consumer<T> resetter;
++    private final int maxSize;
++
++    /**
++     * Create a new object pool.
++     *
++     * @param factory  creates new instances when pool is empty
++     * @param resetter resets an instance before returning to pool (can be null)
++     * @param maxSize  maximum objects per thread (prevents unbounded growth)
++     */
++    public ObjectPool(Supplier<T> factory, Consumer<T> resetter, int maxSize) {
++        this.factory = factory;
++        this.resetter = resetter;
++        this.maxSize = maxSize;
++        this.pool = ThreadLocal.withInitial(ArrayDeque::new);
++    }
++
++    /**
++     * Acquire an object from the pool, or create a new one if empty.
++     */
++    public T acquire() {
++        Deque<T> localPool = pool.get();
++        T obj = localPool.pollFirst();
++        if (obj == null) {
++            return factory.get();
++        }
++        return obj;
++    }
++
++    /**
++     * Return an object to the pool for reuse.
++     * Resets the object before pooling. Silently discards if pool is full.
++     */
++    public void release(T obj) {
++        if (obj == null) return;
++        Deque<T> localPool = pool.get();
++        if (localPool.size() >= maxSize) return; // Discard overflow
++        if (resetter != null) {
++            resetter.accept(obj);
++        }
++        localPool.addFirst(obj);
++    }
++
++    /**
++     * A scoped handle for try-with-resources pattern.
++     * Automatically returns the object to the pool when closed.
++     */
++    public PooledObject<T> scoped() {
++        return new PooledObject<>(this, acquire());
++    }
++
++    /**
++     * Auto-closeable wrapper for pooled objects.
++     */
++    public static final class PooledObject<T> implements AutoCloseable {
++        private final ObjectPool<T> pool;
++        private final T value;
++
++        PooledObject(ObjectPool<T> pool, T value) {
++            this.pool = pool;
++            this.value = value;
++        }
++
++        public T get() {
++            return value;
++        }
++
++        @Override
++        public void close() {
++            pool.release(value);
++        }
++    }
++}

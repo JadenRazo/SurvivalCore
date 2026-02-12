@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: JadenRazo <jadenrazo@yahoo.com>
+Date: Thu, 12 Feb 2026 17:32:42 +0000
+Subject: [PATCH] SurvivalCore bootstrap and monitoring hooks
+
+
+diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
+index 9243bb11e3f968d0bf0eb2e3dc9295c0232bc15d..94d4ef4d7d848fdf42f426b1a01c313b35b22199 100644
+--- a/net/minecraft/server/MinecraftServer.java
++++ b/net/minecraft/server/MinecraftServer.java
+@@ -995,6 +995,9 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+         }
+ 
+         LOGGER.info("Stopping server");
++        // SurvivalCore start - Shutdown optimization systems
++        net.survivalcore.SurvivalCore.shutdown();
++        // SurvivalCore end
+         Commands.COMMAND_SENDING_POOL.shutdownNow(); // Paper - Perf: Async command map building; Shutdown and don't bother finishing
+         // CraftBukkit start
+         if (this.server != null) {
+@@ -1170,6 +1173,9 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+             this.status = this.buildServerStatus();
+ 
+             this.server.spark.enableBeforePlugins(); // Paper - spark
++            // SurvivalCore start - Initialize optimization systems
++            net.survivalcore.SurvivalCore.init(java.nio.file.Path.of("."));
++            // SurvivalCore end
+             // Spigot start
+             // Paper start
+             LOGGER.info("Running delayed init tasks");
+@@ -1489,6 +1495,11 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+ 
+     public void tickServer(BooleanSupplier hasTimeLeft) {
+         org.spigotmc.WatchdogThread.tick(); // Spigot
++        // SurvivalCore start - Performance monitoring tick
++        if (net.survivalcore.monitoring.PerformanceMonitor.isEnabled()) {
++            net.survivalcore.monitoring.PerformanceMonitor.get().tick();
++        }
++        // SurvivalCore end
+         long nanos = Util.getNanos();
+         int i = this.pauseWhileEmptySeconds() * 20;
+         this.removeDisabledPluginsBlockingSleep(); // Paper - API to allow/disallow tick sleeping

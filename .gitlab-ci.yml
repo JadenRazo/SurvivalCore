@@ -1,0 +1,93 @@
+stages:
+  - validate
+  - build
+  - deploy
+
+variables:
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.caching=true"
+  JAVA_VERSION: "21"
+
+default:
+  image: eclipse-temurin:21-jdk
+  cache:
+    key: gradle-cache
+    paths:
+      - .gradle/
+      - build/
+    policy: pull-push
+  before_script:
+    - chmod +x gradlew
+
+# ── Validate ──────────────────────────────────────────────
+
+validate:
+  stage: validate
+  script:
+    - ./gradlew applyAllPatches --stacktrace
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH == "dev"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+
+# ── Build ─────────────────────────────────────────────────
+
+build:
+  stage: build
+  script:
+    - ./gradlew applyAllPatches
+    - ./gradlew createMojmapPaperclipJar --stacktrace
+  artifacts:
+    paths:
+      - build/libs/survivalcore-paperclip-*-mojmap.jar
+    expire_in: 30 days
+    name: survivalcore-${CI_COMMIT_SHORT_SHA}
+  rules:
+    - if: $CI_COMMIT_BRANCH == "dev"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+
+# ── Deploy: Dev ───────────────────────────────────────────
+
+deploy:dev:
+  stage: deploy
+  needs: ["build"]
+  script:
+    - apt-get update -qq && apt-get install -y -qq lftp
+    - |
+      JAR=$(ls build/libs/survivalcore-paperclip-*-mojmap.jar | head -1)
+      if [ -z "$JAR" ]; then
+        echo "No JAR found in build/libs/"
+        exit 1
+      fi
+      echo "Deploying $JAR to dev server..."
+      lftp -u "$DEV_SFTP_USER","$DEV_SFTP_PASSWORD" "sftp://$DEV_SFTP_HOST:$DEV_SFTP_PORT" \
+        -e "set xfer:clobber on; put $JAR -o $DEV_SERVER_PATH/survivalcore.jar; quit"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "dev"
+  environment:
+    name: development
+
+# ── Deploy: Production ────────────────────────────────────
+
+deploy:production:
+  stage: deploy
+  needs: ["build"]
+  script:
+    - apt-get update -qq && apt-get install -y -qq lftp
+    - |
+      JAR=$(ls build/libs/survivalcore-paperclip-*-mojmap.jar | head -1)
+      if [ -z "$JAR" ]; then
+        echo "No JAR found in build/libs/"
+        exit 1
+      fi
+      echo "Deploying $JAR to production..."
+      lftp -u "$SMP_SFTP_USER","$SMP_SFTP_PASSWORD" "sftp://$SMP_SFTP_HOST:$SMP_SFTP_PORT" \
+        -e "set xfer:clobber on; put $JAR -o $PROD_SERVER_PATH/survivalcore.jar; quit"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
+      when: manual
+  environment:
+    name: production

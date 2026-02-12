@@ -1,0 +1,95 @@
+package net.survivalcore.async;
+
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
+import java.util.logging.Logger;
+import net.survivalcore.config.SurvivalCoreConfig;
+
+/**
+ * Manages the async pathfinding thread pool.
+ *
+ * A* path calculations are submitted as CompletableFuture tasks.
+ * Mobs continue their current path until the async result returns
+ * (typically 1-2 tick delay). Uses read-only block access which is
+ * inherently thread-safe.
+ */
+public final class AsyncPathfinder {
+
+    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
+    private static volatile AsyncPathfinder instance;
+    private final ExecutorService executor;
+
+    private AsyncPathfinder(int threads) {
+        ThreadFactory factory = new ThreadFactory() {
+            private final AtomicInteger count = new AtomicInteger(0);
+
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread t = new Thread(r, "SurvivalCore-Pathfinder-" + count.getAndIncrement());
+                t.setDaemon(true);
+                t.setPriority(Thread.NORM_PRIORITY - 1);
+                return t;
+            }
+        };
+
+        this.executor = new ThreadPoolExecutor(
+            threads, threads,
+            60L, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(2048),
+            factory,
+            new ThreadPoolExecutor.CallerRunsPolicy()
+        );
+
+        LOGGER.info("Async pathfinder initialized with " + threads + " threads");
+    }
+
+    public static void init() {
+        SurvivalCoreConfig config = SurvivalCoreConfig.get();
+        if (!config.asyncPathfindingEnabled) {
+            LOGGER.info("Async pathfinding is disabled");
+            return;
+        }
+
+        int threads = config.resolvePathfindingThreads();
+        instance = new AsyncPathfinder(threads);
+    }
+
+    public static AsyncPathfinder get() {
+        return instance;
+    }
+
+    public static boolean isEnabled() {
+        return instance != null;
+    }
+
+    /**
+     * Submit a pathfinding calculation to run asynchronously.
+     *
+     * @param <T>      the path result type
+     * @param supplier the path calculation to perform
+     * @return a future that completes with the calculated path
+     */
+    public <T> CompletableFuture<T> submit(Supplier<T> supplier) {
+        return CompletableFuture.supplyAsync(supplier, executor);
+    }
+
+    public void shutdown() {
+        if (executor != null) {
+            executor.shutdown();
+            try {
+                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                executor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+}

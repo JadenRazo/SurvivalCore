@@ -1,0 +1,80 @@
+package net.survivalcore.math;
+
+import java.util.random.RandomGenerator;
+import net.survivalcore.config.SurvivalCoreConfig;
+
+/**
+ * Factory for faster random number generators.
+ *
+ * Xoroshiro128PlusPlus is significantly faster than Java's default
+ * SecureRandom/SplittableRandom for game simulation purposes where
+ * cryptographic strength isn't required.
+ *
+ * Thread-safe via ThreadLocal instances.
+ */
+public final class FasterRandom {
+
+    private static final ThreadLocal<RandomGenerator> THREAD_LOCAL_RANDOM = ThreadLocal.withInitial(() -> {
+        String generator = SurvivalCoreConfig.get().fasterRandomGenerator;
+        return RandomGenerator.of(generator);
+    });
+
+    private FasterRandom() {}
+
+    /**
+     * Get a fast random generator for the current thread.
+     * Returns Xoroshiro128PlusPlus by default (configurable).
+     */
+    public static RandomGenerator get() {
+        return THREAD_LOCAL_RANDOM.get();
+    }
+
+    /**
+     * Check if faster random is enabled in config.
+     */
+    public static boolean isEnabled() {
+        return SurvivalCoreConfig.get().fasterRandomEnabled;
+    }
+
+    /**
+     * Random int in range [0, bound).
+     */
+    public static int nextInt(int bound) {
+        return get().nextInt(bound);
+    }
+
+    /**
+     * Random int in range [origin, bound).
+     */
+    public static int nextInt(int origin, int bound) {
+        return get().nextInt(origin, bound);
+    }
+
+    /**
+     * Random float in [0.0, 1.0).
+     */
+    public static float nextFloat() {
+        return get().nextFloat();
+    }
+
+    /**
+     * Random double in [0.0, 1.0).
+     */
+    public static double nextDouble() {
+        return get().nextDouble();
+    }
+
+    /**
+     * Random boolean with 50% probability.
+     */
+    public static boolean nextBoolean() {
+        return get().nextBoolean();
+    }
+
+    /**
+     * Random gaussian with mean 0 and standard deviation 1.
+     */
+    public static double nextGaussian() {
+        return get().nextGaussian();
+    }
+}
