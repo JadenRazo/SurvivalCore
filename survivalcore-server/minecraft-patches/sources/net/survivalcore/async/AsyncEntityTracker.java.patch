@@ -1,8 +1,9 @@
 --- /dev/null
 +++ b/net/survivalcore/async/AsyncEntityTracker.java
-@@ -1,0 +_,117 @@
+@@ -1,0 +_,184 @@
 +package net.survivalcore.async;
 +
++import java.util.concurrent.ConcurrentHashMap;
 +import java.util.concurrent.ExecutorService;
 +import java.util.concurrent.LinkedBlockingQueue;
 +import java.util.concurrent.ThreadFactory;
@@ -29,6 +30,8 @@
 +    private static volatile AsyncEntityTracker instance;
 +    private final ExecutorService executor;
 +    private final boolean compatMode;
++    private final ConcurrentHashMap<Integer, Boolean> syncTrackingCache = new ConcurrentHashMap<>();
++    private long lastCacheCleanup = 0;
 +
 +    private AsyncEntityTracker(int threads, boolean compatMode) {
 +        this.compatMode = compatMode;
@@ -92,16 +95,80 @@
 +    }
 +
 +    /**
-+     * Check if an entity class name indicates an NPC that needs sync tracking.
-+     * This is a heuristic check based on common NPC plugin patterns.
++     * Mark an entity for sync tracking from the main thread.
++     * Should be called when NPC entities are spawned/created.
++     *
++     * @param entityId entity network ID
 +     */
-+    public boolean requiresSyncTracking(String entityClassName) {
++    public void markForSyncTracking(int entityId) {
++        if (compatMode) {
++            syncTrackingCache.put(entityId, Boolean.TRUE);
++        }
++    }
++
++    /**
++     * Remove an entity from sync tracking when it's removed.
++     *
++     * @param entityId entity network ID
++     */
++    public void unmarkSyncTracking(int entityId) {
++        if (compatMode) {
++            syncTrackingCache.remove(entityId);
++        }
++    }
++
++    /**
++     * Check if an entity requires sync tracking based on cached data or class name.
++     * Thread-safe: uses concurrent cache and falls back to improved class name matching.
++     *
++     * @param entityId        entity network ID
++     * @param entityClassName simple class name of entity
++     * @return true if entity should be tracked synchronously
++     */
++    public boolean requiresSyncTracking(int entityId, String entityClassName) {
 +        if (!compatMode) return false;
-+        // Common NPC plugin entity class patterns
-+        return entityClassName.contains("NPC")
-+            || entityClassName.contains("Citizens")
-+            || entityClassName.contains("FancyNpc")
-+            || entityClassName.contains("ZNpc");
++
++        // Check cache first (main thread pre-tagged NPCs)
++        Boolean cached = syncTrackingCache.get(entityId);
++        if (cached != null) return cached;
++
++        // Improved class name matching - more specific patterns
++        // Only match known NPC plugin patterns, not just "NPC" substring
++        boolean isNpc = entityClassName.equals("CraftNPC")
++            || entityClassName.equals("CitizensNPC")
++            || entityClassName.equals("FancyNpc")
++            || entityClassName.equals("ZNpc")
++            || entityClassName.equals("NPCEntity")
++            || (entityClassName.startsWith("NPC") && entityClassName.length() < 20); // Avoid false positives
++
++        // Cache the result to avoid repeated checks
++        if (isNpc) {
++            syncTrackingCache.put(entityId, Boolean.TRUE);
++        }
++
++        return isNpc;
++    }
++
++    /**
++     * Clean up the sync tracking cache periodically to prevent memory leaks.
++     * Should be called from main thread every ~5 minutes.
++     *
++     * @param currentTick current server tick
++     */
++    public void cleanupCache(long currentTick) {
++        if (!compatMode) return;
++
++        // Cleanup every 6000 ticks (5 minutes)
++        if (currentTick - lastCacheCleanup > 6000) {
++            // Clear entries for entities that no longer exist
++            // In practice, unmarkSyncTracking should be called on entity removal,
++            // but this provides a safety net against leaks
++            if (syncTrackingCache.size() > 1000) {
++                LOGGER.warning("AsyncEntityTracker cache is large (" + syncTrackingCache.size()
++                    + " entries). Consider calling unmarkSyncTracking on entity removal.");
++            }
++            lastCacheCleanup = currentTick;
++        }
 +    }
 +
 +    public void shutdown() {

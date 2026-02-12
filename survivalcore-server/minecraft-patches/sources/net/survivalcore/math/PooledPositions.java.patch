@@ -1,0 +1,131 @@
+--- /dev/null
++++ b/net/survivalcore/math/PooledPositions.java
+@@ -1,0 +_,128 @@
++package net.survivalcore.math;
++
++/**
++ * Convenient object pools for commonly allocated position objects.
++ *
++ * Provides pre-configured pools for:
++ * - Vec3 (double[3]) for world positions, velocities, vectors
++ * - BlockPos (int[3]) for block coordinates
++ *
++ * Uses the underlying ObjectPool system with appropriate reset logic
++ * and pool sizes for typical Minecraft server workloads.
++ */
++public final class PooledPositions {
++
++    // Pool for Vec3-like double[3] arrays
++    private static final ObjectPool<double[]> VEC3_POOL = new ObjectPool<>(
++        () -> new double[3],
++        arr -> {
++            arr[0] = 0.0;
++            arr[1] = 0.0;
++            arr[2] = 0.0;
++        },
++        256 // Pool size per thread
++    );
++
++    // Pool for BlockPos-like int[3] arrays
++    private static final ObjectPool<int[]> BLOCKPOS_POOL = new ObjectPool<>(
++        () -> new int[3],
++        arr -> {
++            arr[0] = 0;
++            arr[1] = 0;
++            arr[2] = 0;
++        },
++        256 // Pool size per thread
++    );
++
++    private PooledPositions() {}
++
++    /**
++     * Acquire a pooled Vec3 array (double[3]) with try-with-resources support.
++     *
++     * Example:
++     * <pre>
++     * try (var pooled = PooledPositions.acquireVec3()) {
++     *     double[] vec = pooled.get();
++     *     vec[0] = x;
++     *     vec[1] = y;
++     *     vec[2] = z;
++     *     // ... use vec ...
++     * } // Automatically returned to pool
++     * </pre>
++     */
++    public static ObjectPool.PooledObject<double[]> acquireVec3() {
++        return VEC3_POOL.scoped();
++    }
++
++    /**
++     * Acquire a pooled BlockPos array (int[3]) with try-with-resources support.
++     *
++     * Example:
++     * <pre>
++     * try (var pooled = PooledPositions.acquireBlockPos()) {
++     *     int[] pos = pooled.get();
++     *     pos[0] = blockX;
++     *     pos[1] = blockY;
++     *     pos[2] = blockZ;
++     *     // ... use pos ...
++     * } // Automatically returned to pool
++     * </pre>
++     */
++    public static ObjectPool.PooledObject<int[]> acquireBlockPos() {
++        return BLOCKPOS_POOL.scoped();
++    }
++
++    /**
++     * Get a Vec3 array from the pool and initialize it.
++     * IMPORTANT: Must call releaseVec3() when done to return to pool.
++     */
++    public static double[] getVec3(double x, double y, double z) {
++        double[] vec = VEC3_POOL.acquire();
++        vec[0] = x;
++        vec[1] = y;
++        vec[2] = z;
++        return vec;
++    }
++
++    /**
++     * Return a Vec3 array to the pool.
++     */
++    public static void releaseVec3(double[] vec) {
++        VEC3_POOL.release(vec);
++    }
++
++    /**
++     * Get a BlockPos array from the pool and initialize it.
++     * IMPORTANT: Must call releaseBlockPos() when done to return to pool.
++     */
++    public static int[] getBlockPos(int x, int y, int z) {
++        int[] pos = BLOCKPOS_POOL.acquire();
++        pos[0] = x;
++        pos[1] = y;
++        pos[2] = z;
++        return pos;
++    }
++
++    /**
++     * Return a BlockPos array to the pool.
++     */
++    public static void releaseBlockPos(int[] pos) {
++        BLOCKPOS_POOL.release(pos);
++    }
++
++    /**
++     * Acquire a raw Vec3 array from the pool (uninitialized).
++     * Caller must manually release via releaseVec3().
++     */
++    public static double[] acquireVec3Raw() {
++        return VEC3_POOL.acquire();
++    }
++
++    /**
++     * Acquire a raw BlockPos array from the pool (uninitialized).
++     * Caller must manually release via releaseBlockPos().
++     */
++    public static int[] acquireBlockPosRaw() {
++        return BLOCKPOS_POOL.acquire();
++    }
++}

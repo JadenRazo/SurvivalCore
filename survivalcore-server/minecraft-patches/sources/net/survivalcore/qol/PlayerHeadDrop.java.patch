@@ -1,0 +1,37 @@
+--- /dev/null
++++ b/net/survivalcore/qol/PlayerHeadDrop.java
+@@ -1,0 +_,34 @@
++package net.survivalcore.qol;
++
++import java.util.logging.Logger;
++import net.survivalcore.config.SurvivalCoreConfig;
++
++/**
++ * Player head drop on death.
++ * Called from ServerPlayer death handling patch.
++ */
++public final class PlayerHeadDrop {
++
++    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
++
++    private PlayerHeadDrop() {}
++
++    /**
++     * Whether player head drops are enabled.
++     */
++    public static boolean isEnabled() {
++        return SurvivalCoreConfig.get().qolPlayerHeadDropsEnabled;
++    }
++
++    /**
++     * Whether a head should drop for this death (based on configured chance).
++     * Uses the provided random value (0.0-1.0) from the caller.
++     *
++     * @param randomValue a random double between 0.0 and 1.0
++     * @return true if head should drop
++     */
++    public static boolean shouldDropHead(double randomValue) {
++        if (!SurvivalCoreConfig.get().qolPlayerHeadDropsEnabled) return false;
++        return randomValue < SurvivalCoreConfig.get().qolPlayerHeadDropsChance;
++    }
++}

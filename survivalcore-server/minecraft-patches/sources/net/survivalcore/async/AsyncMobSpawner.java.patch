@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/async/AsyncMobSpawner.java
-@@ -1,0 +_,89 @@
+@@ -1,0 +_,94 @@
 +package net.survivalcore.async;
 +
 +import java.util.concurrent.ExecutorService;
@@ -20,6 +20,11 @@
 + *
 + * This split keeps the expensive position/condition checking off the main thread
 + * while ensuring entity creation events fire on the main thread as plugins expect.
++ *
++ * NOTE: Currently not fully wired into NaturalSpawner due to complexity of safely
++ * accessing chunk data from async threads. The infrastructure is in place but actual
++ * spawn position calculation remains synchronous to ensure thread safety. Future
++ * enhancement could use chunk snapshots or read-only chunk views for async access.
 + */
 +public final class AsyncMobSpawner {
 +

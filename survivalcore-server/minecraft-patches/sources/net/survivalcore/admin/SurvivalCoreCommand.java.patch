@@ -1,0 +1,348 @@
+--- /dev/null
++++ b/net/survivalcore/admin/SurvivalCoreCommand.java
+@@ -1,0 +_,345 @@
++package net.survivalcore.admin;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Locale;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.kyori.adventure.text.format.TextDecoration;
++import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
++import net.minecraft.server.MinecraftServer;
++import net.survivalcore.SurvivalCore;
++import net.survivalcore.config.PresetManager;
++import net.survivalcore.monitoring.MonitorCommand;
++import org.bukkit.Bukkit;
++import org.bukkit.Location;
++import org.bukkit.command.Command;
++import org.bukkit.command.CommandSender;
++import org.bukkit.permissions.Permission;
++import org.bukkit.permissions.PermissionDefault;
++import org.bukkit.plugin.PluginManager;
++import org.checkerframework.checker.nullness.qual.NonNull;
++import org.checkerframework.checker.nullness.qual.Nullable;
++
++/**
++ * Main command handler for /survivalcore.
++ *
++ * Provides subcommands for monitoring performance, managing presets,
++ * reloading configuration, and displaying version information.
++ *
++ * Pattern: Follows Paper's PaperCommand design with subcommand delegation.
++ */
++public final class SurvivalCoreCommand extends Command {
++
++    private static final LegacyComponentSerializer LEGACY_SERIALIZER =
++        LegacyComponentSerializer.legacySection();
++
++    public SurvivalCoreCommand(final String name) {
++        super(name);
++        this.description = "SurvivalCore management commands";
++        this.usageMessage = "/survivalcore <monitor|preset|reload|version>";
++
++        // Register all permissions
++        final List<String> permissions = List.of(
++            PermissionNodes.BASE,
++            PermissionNodes.MONITOR,
++            PermissionNodes.PRESET,
++            PermissionNodes.RELOAD,
++            PermissionNodes.VERSION
++        );
++        this.setPermission(String.join(";", permissions));
++
++        // Add permissions to Bukkit with OP default
++        final PluginManager pluginManager = Bukkit.getServer().getPluginManager();
++        for (final String perm : permissions) {
++            pluginManager.addPermission(new Permission(perm, PermissionDefault.OP));
++        }
++    }
++
++    /**
++     * Register the /survivalcore command with the server.
++     * Called from CraftServer during initialization.
++     */
++    public static void registerCommand(final MinecraftServer server) {
++        server.server.getCommandMap().register("survivalcore", "SurvivalCore", new SurvivalCoreCommand("survivalcore"));
++    }
++
++    @Override
++    public boolean execute(
++        final @NonNull CommandSender sender,
++        final @NonNull String commandLabel,
++        final @NonNull String[] args
++    ) {
++        if (args.length == 0) {
++            sendUsage(sender);
++            return true;
++        }
++
++        final String subcommand = args[0].toLowerCase(Locale.ENGLISH);
++
++        switch (subcommand) {
++            case "monitor" -> {
++                if (!checkPermission(sender, PermissionNodes.MONITOR)) return true;
++                return executeMonitor(sender, args);
++            }
++            case "preset" -> {
++                if (!checkPermission(sender, PermissionNodes.PRESET)) return true;
++                return executePreset(sender, args);
++            }
++            case "reload" -> {
++                if (!checkPermission(sender, PermissionNodes.RELOAD)) return true;
++                return executeReload(sender);
++            }
++            case "version" -> {
++                if (!checkPermission(sender, PermissionNodes.VERSION)) return true;
++                return executeVersion(sender);
++            }
++            default -> {
++                sender.sendMessage(
++                    Component.text("Unknown subcommand: ", NamedTextColor.RED)
++                        .append(Component.text(subcommand, NamedTextColor.GOLD))
++                );
++                sendUsage(sender);
++                return true;
++            }
++        }
++    }
++
++    @Override
++    public @NonNull List<String> tabComplete(
++        final @NonNull CommandSender sender,
++        final @NonNull String alias,
++        final @NonNull String[] args,
++        final @Nullable Location location
++    ) throws IllegalArgumentException {
++        if (args.length == 0) {
++            return List.of("monitor", "preset", "reload", "version");
++        }
++
++        if (args.length == 1) {
++            final String partial = args[0].toLowerCase(Locale.ENGLISH);
++            return List.of("monitor", "preset", "reload", "version").stream()
++                .filter(cmd -> cmd.startsWith(partial))
++                .toList();
++        }
++
++        final String subcommand = args[0].toLowerCase(Locale.ENGLISH);
++
++        if (subcommand.equals("monitor") && args.length == 2) {
++            final String partial = args[1].toLowerCase(Locale.ENGLISH);
++            return List.of("tps", "entities", "farms", "threads").stream()
++                .filter(sub -> sub.startsWith(partial))
++                .toList();
++        }
++
++        if (subcommand.equals("preset") && args.length == 2) {
++            final String partial = args[1].toLowerCase(Locale.ENGLISH);
++            return List.of("conservative", "balanced", "aggressive", "potato").stream()
++                .filter(preset -> preset.startsWith(partial))
++                .toList();
++        }
++
++        return List.of();
++    }
++
++    // ==================== Subcommand Implementations ====================
++
++    /**
++     * Execute /survivalcore monitor [tps|entities|farms|threads]
++     */
++    private boolean executeMonitor(final CommandSender sender, final String[] args) {
++        final String monitorSubcommand = args.length > 1 ? args[1] : null;
++
++        // Generate report from MonitorCommand
++        final String[] reportLines = MonitorCommand.generateReport(monitorSubcommand);
++
++        // Convert legacy § codes to Adventure components and send
++        for (final String line : reportLines) {
++            sender.sendMessage(LEGACY_SERIALIZER.deserialize(line));
++        }
++
++        return true;
++    }
++
++    /**
++     * Execute /survivalcore preset <conservative|balanced|aggressive|potato>
++     */
++    private boolean executePreset(final CommandSender sender, final String[] args) {
++        if (args.length < 2) {
++            sender.sendMessage(
++                Component.text("Usage: ", NamedTextColor.RED)
++                    .append(Component.text("/survivalcore preset <conservative|balanced|aggressive|potato>", NamedTextColor.GRAY))
++            );
++            sender.sendMessage(Component.empty());
++            sender.sendMessage(Component.text("Available presets:", NamedTextColor.GOLD));
++            for (final PresetManager.Preset preset : PresetManager.Preset.values()) {
++                sender.sendMessage(
++                    Component.text("  • ", NamedTextColor.DARK_GRAY)
++                        .append(Component.text(preset.id, NamedTextColor.YELLOW))
++                        .append(Component.text(": ", NamedTextColor.DARK_GRAY))
++                        .append(Component.text(preset.description, NamedTextColor.GRAY))
++                );
++            }
++            return true;
++        }
++
++        final String presetName = args[1];
++        final PresetManager.Preset preset = PresetManager.fromString(presetName);
++
++        if (preset == null) {
++            sender.sendMessage(
++                Component.text("Unknown preset: ", NamedTextColor.RED)
++                    .append(Component.text(presetName, NamedTextColor.GOLD))
++            );
++            sender.sendMessage(
++                Component.text("Available: conservative, balanced, aggressive, potato", NamedTextColor.GRAY)
++            );
++            return true;
++        }
++
++        // Apply the preset to the configuration file
++        sender.sendMessage(
++            Component.text("Applying preset: ", NamedTextColor.YELLOW)
++                .append(Component.text(preset.id, NamedTextColor.GOLD, TextDecoration.BOLD))
++                .append(Component.text("...", NamedTextColor.YELLOW))
++        );
++
++        final boolean success = PresetManager.applyPreset(SurvivalCore.getServerRoot(), preset);
++
++        if (!success) {
++            sender.sendMessage(
++                Component.text("Failed to apply preset. Check console for errors.", NamedTextColor.RED)
++            );
++            return true;
++        }
++
++        // Reload the configuration to apply changes
++        SurvivalCore.reload(SurvivalCore.getServerRoot());
++
++        sender.sendMessage(
++            Component.text("✓ ", NamedTextColor.GREEN, TextDecoration.BOLD)
++                .append(Component.text("Preset applied successfully!", NamedTextColor.GREEN))
++        );
++        sender.sendMessage(
++            Component.text("Configuration reloaded. Some changes may require a server restart.", NamedTextColor.GRAY)
++        );
++
++        return true;
++    }
++
++    /**
++     * Execute /survivalcore reload
++     */
++    private boolean executeReload(final CommandSender sender) {
++        sender.sendMessage(
++            Component.text("Reloading ", NamedTextColor.YELLOW)
++                .append(Component.text("SurvivalCore", NamedTextColor.GOLD, TextDecoration.BOLD))
++                .append(Component.text(" configuration...", NamedTextColor.YELLOW))
++        );
++
++        try {
++            SurvivalCore.reload(SurvivalCore.getServerRoot());
++
++            sender.sendMessage(
++                Component.text("✓ ", NamedTextColor.GREEN, TextDecoration.BOLD)
++                    .append(Component.text("Configuration reloaded successfully!", NamedTextColor.GREEN))
++            );
++            sender.sendMessage(
++                Component.text("Some changes may require a server restart to take full effect.", NamedTextColor.GRAY)
++            );
++        } catch (Exception e) {
++            sender.sendMessage(
++                Component.text("✗ ", NamedTextColor.RED, TextDecoration.BOLD)
++                    .append(Component.text("Failed to reload configuration!", NamedTextColor.RED))
++            );
++            sender.sendMessage(
++                Component.text("Error: ", NamedTextColor.DARK_RED)
++                    .append(Component.text(e.getMessage(), NamedTextColor.RED))
++            );
++        }
++
++        return true;
++    }
++
++    /**
++     * Execute /survivalcore version
++     */
++    private boolean executeVersion(final CommandSender sender) {
++        sender.sendMessage(Component.empty());
++        sender.sendMessage(
++            Component.text("═══════════════════════════════════════", NamedTextColor.DARK_GRAY)
++        );
++        sender.sendMessage(
++            Component.text("  ", NamedTextColor.GRAY)
++                .append(Component.text(SurvivalCore.NAME, NamedTextColor.GOLD, TextDecoration.BOLD))
++                .append(Component.text(" v" + SurvivalCore.VERSION, NamedTextColor.YELLOW))
++        );
++        sender.sendMessage(
++            Component.text("  Custom Paper fork for survival servers", NamedTextColor.GRAY)
++        );
++        sender.sendMessage(Component.empty());
++        sender.sendMessage(
++            Component.text("  Source: ", NamedTextColor.DARK_GRAY)
++                .append(Component.text("gitlab.com/JadenRazo/SurvivalCore", NamedTextColor.AQUA))
++        );
++        sender.sendMessage(
++            Component.text("═══════════════════════════════════════", NamedTextColor.DARK_GRAY)
++        );
++        sender.sendMessage(Component.empty());
++
++        return true;
++    }
++
++    // ==================== Helper Methods ====================
++
++    /**
++     * Send usage information to the sender.
++     */
++    private void sendUsage(final CommandSender sender) {
++        sender.sendMessage(Component.empty());
++        sender.sendMessage(
++            Component.text("SurvivalCore Commands", NamedTextColor.GOLD, TextDecoration.BOLD)
++        );
++        sender.sendMessage(Component.empty());
++
++        sendCommandHelp(sender, "/survivalcore monitor [type]", "View performance statistics");
++        sender.sendMessage(
++            Component.text("    Types: ", NamedTextColor.DARK_GRAY)
++                .append(Component.text("tps, entities, farms, threads", NamedTextColor.GRAY))
++        );
++
++        sendCommandHelp(sender, "/survivalcore preset <name>", "Apply a configuration preset");
++        sender.sendMessage(
++            Component.text("    Presets: ", NamedTextColor.DARK_GRAY)
++                .append(Component.text("conservative, balanced, aggressive, potato", NamedTextColor.GRAY))
++        );
++
++        sendCommandHelp(sender, "/survivalcore reload", "Reload configuration from disk");
++        sendCommandHelp(sender, "/survivalcore version", "Show version information");
++
++        sender.sendMessage(Component.empty());
++    }
++
++    /**
++     * Send a single command help line.
++     */
++    private void sendCommandHelp(final CommandSender sender, final String command, final String description) {
++        sender.sendMessage(
++            Component.text("  • ", NamedTextColor.DARK_GRAY)
++                .append(Component.text(command, NamedTextColor.YELLOW))
++                .append(Component.text(" - ", NamedTextColor.DARK_GRAY))
++                .append(Component.text(description, NamedTextColor.GRAY))
++        );
++    }
++
++    /**
++     * Check if sender has the required permission.
++     */
++    private boolean checkPermission(final CommandSender sender, final String permission) {
++        if (sender.hasPermission(permission) || sender.hasPermission(PermissionNodes.BASE)) {
++            return true;
++        }
++        sender.sendMessage(Bukkit.permissionMessage());
++        return false;
++    }
++}

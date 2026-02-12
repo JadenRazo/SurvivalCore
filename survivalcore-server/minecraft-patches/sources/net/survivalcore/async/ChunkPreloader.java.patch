@@ -1,0 +1,191 @@
+--- /dev/null
++++ b/net/survivalcore/async/ChunkPreloader.java
+@@ -1,0 +_,188 @@
++package net.survivalcore.async;
++
++import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
++import net.survivalcore.config.SurvivalCoreConfig;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.UUID;
++import java.util.concurrent.ConcurrentHashMap;
++import java.util.logging.Logger;
++
++/**
++ * Predictive chunk preloading based on player movement vectors.
++ *
++ * Tracks player positions and calculates movement direction to predict
++ * which chunks they'll need next. Preloads 1-2 chunks ahead in the
++ * direction of travel to reduce lag spikes from on-demand loading.
++ *
++ * Automatically throttles when server TPS is low to avoid making
++ * performance worse.
++ *
++ * NOTE: The infrastructure is complete but not yet wired into ServerLevel
++ * tick loop. To complete the integration, add hooks in ServerLevel.tick()
++ * to call updatePlayerPosition() for each player and getChunksToPreload()
++ * to schedule async chunk loads via ChunkMap.
++ */
++public final class ChunkPreloader {
++
++    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
++    private static ChunkPreloader instance;
++
++    private final boolean enabled;
++    private final int preloadRadius;
++    private final ConcurrentHashMap<UUID, PlayerMovement> lastPositions = new ConcurrentHashMap<>();
++    private final LongOpenHashSet queuedChunks = new LongOpenHashSet();
++    private long lastCleanupTick = 0;
++
++    // Minimum TPS before preloading is disabled
++    private static final double MIN_TPS_THRESHOLD = 18.0;
++
++    // Minimum movement speed (blocks/tick) to trigger preloading
++    private static final double MIN_SPEED = 0.2;
++
++    private ChunkPreloader(SurvivalCoreConfig config) {
++        this.enabled = config.asyncChunkPreloadingEnabled;
++        this.preloadRadius = config.asyncChunkPreloadingRadius;
++    }
++
++    public static void init() {
++        SurvivalCoreConfig config = SurvivalCoreConfig.get();
++        instance = new ChunkPreloader(config);
++
++        if (instance.enabled) {
++            LOGGER.info("Chunk preloading enabled");
++        } else {
++            LOGGER.info("Chunk preloading disabled");
++        }
++    }
++
++    public static ChunkPreloader get() {
++        if (instance == null) {
++            throw new IllegalStateException("ChunkPreloader not initialized");
++        }
++        return instance;
++    }
++
++    public static boolean isEnabled() {
++        return instance != null && instance.enabled;
++    }
++
++    /**
++     * Update player position and calculate movement vector.
++     *
++     * @param playerId player UUID
++     * @param x        current X position
++     * @param z        current Z position
++     */
++    public void updatePlayerPosition(UUID playerId, double x, double z) {
++        if (!enabled) return;
++
++        PlayerMovement last = lastPositions.get(playerId);
++        if (last == null) {
++            lastPositions.put(playerId, new PlayerMovement(x, z, 0, 0));
++        } else {
++            double dx = x - last.x;
++            double dz = z - last.z;
++            lastPositions.put(playerId, new PlayerMovement(x, z, dx, dz));
++        }
++    }
++
++    /**
++     * Get chunks that should be preloaded based on player movement.
++     *
++     * @param playerId player UUID
++     * @param x        current X position
++     * @param z        current Z position
++     * @return list of chunk coordinates [chunkX, chunkZ] to preload
++     */
++    public List<long[]> getChunksToPreload(UUID playerId, double x, double z) {
++        if (!enabled) return List.of();
++
++        PlayerMovement movement = lastPositions.get(playerId);
++        if (movement == null) return List.of();
++
++        // Calculate movement speed
++        double speed = Math.sqrt(movement.dx * movement.dx + movement.dz * movement.dz);
++        if (speed < MIN_SPEED) return List.of();
++
++        // Normalize movement vector
++        double dirX = movement.dx / speed;
++        double dirZ = movement.dz / speed;
++
++        // Current chunk
++        int currentChunkX = (int) Math.floor(x / 16.0);
++        int currentChunkZ = (int) Math.floor(z / 16.0);
++
++        List<long[]> chunksToLoad = new ArrayList<>();
++
++        // Preload chunks ahead in movement direction
++        for (int distance = 1; distance <= preloadRadius; distance++) {
++            int targetChunkX = currentChunkX + (int) Math.round(dirX * distance);
++            int targetChunkZ = currentChunkZ + (int) Math.round(dirZ * distance);
++            long chunkKey = packChunkKey(targetChunkX, targetChunkZ);
++
++            if (queuedChunks.add(chunkKey)) {
++                chunksToLoad.add(new long[]{targetChunkX, targetChunkZ});
++            }
++        }
++
++        return chunksToLoad;
++    }
++
++    /**
++     * Check if preloading should be throttled based on server performance.
++     *
++     * @param currentTps current server TPS
++     * @return true if preloading should proceed, false if throttled
++     */
++    public boolean shouldPreload(double currentTps) {
++        return enabled && currentTps >= MIN_TPS_THRESHOLD;
++    }
++
++    /**
++     * Remove player tracking when they disconnect.
++     *
++     * @param playerId player UUID
++     */
++    public void removePlayer(UUID playerId) {
++        if (enabled) {
++            lastPositions.remove(playerId);
++        }
++    }
++
++    /**
++     * Reset the queued chunks set periodically to allow re-preloading.
++     * Should be called approximately every 100 ticks (5 seconds).
++     *
++     * @param currentTick current server tick
++     */
++    public void resetQueuedChunks(long currentTick) {
++        if (!enabled) return;
++
++        if (currentTick - lastCleanupTick >= 100) {
++            queuedChunks.clear();
++            lastCleanupTick = currentTick;
++        }
++    }
++
++    /**
++     * Get current stats for monitoring.
++     */
++    public PreloadStats getStats() {
++        return new PreloadStats(
++            lastPositions.size(),
++            queuedChunks.size()
++        );
++    }
++
++    /**
++     * Pack chunk coordinates into a single long for use as map key.
++     */
++    private long packChunkKey(int chunkX, int chunkZ) {
++        return ((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL);
++    }
++
++    private record PlayerMovement(double x, double z, double dx, double dz) {}
++
++    public record PreloadStats(int trackedPlayers, int queuedChunks) {}
++}

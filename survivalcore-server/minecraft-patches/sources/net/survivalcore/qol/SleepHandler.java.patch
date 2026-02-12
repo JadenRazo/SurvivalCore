@@ -1,0 +1,52 @@
+--- /dev/null
++++ b/net/survivalcore/qol/SleepHandler.java
+@@ -1,0 +_,49 @@
++package net.survivalcore.qol;
++
++import java.util.logging.Logger;
++import net.survivalcore.config.SurvivalCoreConfig;
++
++/**
++ * Sleep mechanics improvements.
++ * Called from ServerLevel and ServerPlayer patches.
++ */
++public final class SleepHandler {
++
++    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
++
++    private SleepHandler() {}
++
++    /**
++     * Whether single-player sleep is enabled (one player sleeping advances time for all).
++     */
++    public static boolean isSinglePlayerSleepEnabled() {
++        return SurvivalCoreConfig.get().qolSinglePlayerSleep;
++    }
++
++    /**
++     * Calculate the required sleeping player count.
++     * When single-player-sleep is enabled, returns 1 regardless of total players.
++     *
++     * @param totalPlayers total players in the world
++     * @param vanillaRequired vanilla required count
++     * @return adjusted required count
++     */
++    public static int getRequiredSleepingPlayers(int totalPlayers, int vanillaRequired) {
++        if (!SurvivalCoreConfig.get().qolSinglePlayerSleep) return vanillaRequired;
++        return 1;
++    }
++
++    /**
++     * Whether to clear weather when players wake up.
++     */
++    public static boolean shouldClearWeather() {
++        return SurvivalCoreConfig.get().qolSleepClearWeather;
++    }
++
++    /**
++     * Whether to reset phantom insomnia timers when any player sleeps.
++     */
++    public static boolean shouldResetPhantomTimers() {
++        return SurvivalCoreConfig.get().qolSleepResetPhantoms;
++    }
++}

@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/math/ObjectPool.java
-@@ -1,0 +_,95 @@
+@@ -1,0 +_,101 @@
 +package net.survivalcore.math;
 +
 +import java.util.ArrayDeque;
@@ -16,6 +16,12 @@
 + * its own pool to avoid synchronization overhead.
 + *
 + * Falls back to creating new instances when the pool is exhausted.
++ *
++ * NOTE: This pool infrastructure is ready for use but not yet wired into
++ * hot paths (pathfinding, collision checks, etc.) due to complexity of
++ * ensuring objects don't escape their lifecycle. Positions used across tick
++ * boundaries or stored in data structures must NOT be pooled. Safe usage
++ * requires careful analysis of object lifetime in each hot path.
 + *
 + * @param <T> the pooled object type
 + */

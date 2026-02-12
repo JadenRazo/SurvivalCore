@@ -1,8 +1,11 @@
 --- /dev/null
 +++ b/net/survivalcore/math/SIMDOperations.java
-@@ -1,0 +_,107 @@
+@@ -1,0 +_,221 @@
 +package net.survivalcore.math;
 +
++import jdk.incubator.vector.DoubleVector;
++import jdk.incubator.vector.FloatVector;
++import jdk.incubator.vector.VectorSpecies;
 +import java.util.logging.Logger;
 +
 +/**
@@ -40,7 +43,7 @@
 +
 +    /**
 +     * Batch distance-squared calculations for entity distance checks.
-+     * Processes 4 entity positions at a time using SIMD.
++     * Processes 4 entity positions at a time using SIMD when available.
 +     *
 +     * @param originX  reference X position
 +     * @param originY  reference Y position
@@ -56,8 +59,21 @@
 +        double[] entityX, double[] entityY, double[] entityZ,
 +        double[] results, int count
 +    ) {
-+        // Scalar fallback (or when Vector API is unavailable)
-+        // When Vector API is available, this path would use DoubleVector.SPECIES_256
++        if (vectorApiAvailable) {
++            batchDistanceSqSIMD(originX, originY, originZ, entityX, entityY, entityZ, results, count);
++        } else {
++            batchDistanceSqScalar(originX, originY, originZ, entityX, entityY, entityZ, results, count);
++        }
++    }
++
++    /**
++     * Scalar fallback for batch distance calculations.
++     */
++    private static void batchDistanceSqScalar(
++        double originX, double originY, double originZ,
++        double[] entityX, double[] entityY, double[] entityZ,
++        double[] results, int count
++    ) {
 +        for (int i = 0; i < count; i++) {
 +            double dx = entityX[i] - originX;
 +            double dy = entityY[i] - originY;
@@ -67,8 +83,50 @@
 +    }
 +
 +    /**
++     * SIMD-accelerated batch distance calculations.
++     * Uses direct Vector API calls for optimal performance.
++     */
++    private static void batchDistanceSqSIMD(
++        double originX, double originY, double originZ,
++        double[] entityX, double[] entityY, double[] entityZ,
++        double[] results, int count
++    ) {
++        try {
++            VectorSpecies<Double> species = DoubleVector.SPECIES_256;
++            int step = species.length(); // 4
++
++            int i = 0;
++            for (; i + step <= count; i += step) {
++                // Load entity positions and subtract origin
++                DoubleVector vx = DoubleVector.fromArray(species, entityX, i).sub(originX);
++                DoubleVector vy = DoubleVector.fromArray(species, entityY, i).sub(originY);
++                DoubleVector vz = DoubleVector.fromArray(species, entityZ, i).sub(originZ);
++
++                // Compute distance squared: dx^2 + dy^2 + dz^2
++                DoubleVector result = vx.mul(vx).add(vy.mul(vy)).add(vz.mul(vz));
++
++                // Store result
++                result.intoArray(results, i);
++            }
++
++            // Scalar tail for remaining elements
++            for (; i < count; i++) {
++                double dx = entityX[i] - originX;
++                double dy = entityY[i] - originY;
++                double dz = entityZ[i] - originZ;
++                results[i] = dx * dx + dy * dy + dz * dz;
++            }
++        } catch (Exception e) {
++            // Fallback to scalar if SIMD fails
++            LOGGER.warning("SIMD batch distance calculation failed, using scalar fallback: " + e.getMessage());
++            batchDistanceSqScalar(originX, originY, originZ, entityX, entityY, entityZ, results, count);
++        }
++    }
++
++    /**
 +     * Batch color distance calculations for map rendering.
 +     * Computes distances between a target color and an array of palette colors.
++     * Processes 8 colors at a time using SIMD when available.
 +     *
 +     * @param targetR  target red component
 +     * @param targetG  target green component
@@ -84,11 +142,67 @@
 +        float[] paletteR, float[] paletteG, float[] paletteB,
 +        float[] results, int count
 +    ) {
++        if (vectorApiAvailable) {
++            batchColorDistanceSIMD(targetR, targetG, targetB, paletteR, paletteG, paletteB, results, count);
++        } else {
++            batchColorDistanceScalar(targetR, targetG, targetB, paletteR, paletteG, paletteB, results, count);
++        }
++    }
++
++    /**
++     * Scalar fallback for batch color distance calculations.
++     */
++    private static void batchColorDistanceScalar(
++        float targetR, float targetG, float targetB,
++        float[] paletteR, float[] paletteG, float[] paletteB,
++        float[] results, int count
++    ) {
 +        for (int i = 0; i < count; i++) {
 +            float dr = paletteR[i] - targetR;
 +            float dg = paletteG[i] - targetG;
 +            float db = paletteB[i] - targetB;
 +            results[i] = dr * dr + dg * dg + db * db;
++        }
++    }
++
++    /**
++     * SIMD-accelerated batch color distance calculations.
++     * Uses direct Vector API calls for optimal performance.
++     */
++    private static void batchColorDistanceSIMD(
++        float targetR, float targetG, float targetB,
++        float[] paletteR, float[] paletteG, float[] paletteB,
++        float[] results, int count
++    ) {
++        try {
++            VectorSpecies<Float> species = FloatVector.SPECIES_256;
++            int step = species.length(); // 8
++
++            int i = 0;
++            for (; i + step <= count; i += step) {
++                // Load palette colors and subtract target
++                FloatVector vr = FloatVector.fromArray(species, paletteR, i).sub(targetR);
++                FloatVector vg = FloatVector.fromArray(species, paletteG, i).sub(targetG);
++                FloatVector vb = FloatVector.fromArray(species, paletteB, i).sub(targetB);
++
++                // Compute color distance squared: dr^2 + dg^2 + db^2
++                FloatVector result = vr.mul(vr).add(vg.mul(vg)).add(vb.mul(vb));
++
++                // Store result
++                result.intoArray(results, i);
++            }
++
++            // Scalar tail for remaining elements
++            for (; i < count; i++) {
++                float dr = paletteR[i] - targetR;
++                float dg = paletteG[i] - targetG;
++                float db = paletteB[i] - targetB;
++                results[i] = dr * dr + dg * dg + db * db;
++            }
++        } catch (Exception e) {
++            // Fallback to scalar if SIMD fails
++            LOGGER.warning("SIMD batch color distance calculation failed, using scalar fallback: " + e.getMessage());
++            batchColorDistanceScalar(targetR, targetG, targetB, paletteR, paletteG, paletteB, results, count);
 +        }
 +    }
 +

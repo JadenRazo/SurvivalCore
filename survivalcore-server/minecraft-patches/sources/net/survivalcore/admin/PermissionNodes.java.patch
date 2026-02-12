@@ -1,0 +1,30 @@
+--- /dev/null
++++ b/net/survivalcore/admin/PermissionNodes.java
+@@ -1,0 +_,27 @@
++package net.survivalcore.admin;
++
++/**
++ * Permission node constants for SurvivalCore commands.
++ *
++ * All permission nodes default to OP only via PermissionDefault.OP.
++ * Server admins can override these in their permission plugin.
++ */
++public final class PermissionNodes {
++
++    /** Base permission node for all SurvivalCore commands */
++    public static final String BASE = "survivalcore.command";
++
++    /** Permission for /survivalcore monitor */
++    public static final String MONITOR = BASE + ".monitor";
++
++    /** Permission for /survivalcore preset */
++    public static final String PRESET = BASE + ".preset";
++
++    /** Permission for /survivalcore reload */
++    public static final String RELOAD = BASE + ".reload";
++
++    /** Permission for /survivalcore version (always allowed) */
++    public static final String VERSION = BASE + ".version";
++
++    private PermissionNodes() {}
++}

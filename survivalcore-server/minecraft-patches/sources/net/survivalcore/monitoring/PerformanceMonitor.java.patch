@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/monitoring/PerformanceMonitor.java
-@@ -1,0 +_,201 @@
+@@ -1,0 +_,268 @@
 +package net.survivalcore.monitoring;
 +
 +import java.util.Map;
@@ -41,6 +41,19 @@
 +    public static final String REDSTONE = "redstone";
 +    public static final String TICK_TOTAL = "tick-total";
 +
++    // Performance optimization categories
++    public static final String DAB_SKIPPED = "dab-skipped";
++    public static final String BUDGET_DEFERRED = "budget-deferred";
++    public static final String MERGES_THROTTLED = "merges-throttled";
++    public static final String TNT_BATCHED = "tnt-batched";
++    public static final String OBSERVERS_DEBOUNCED = "observers-debounced";
++    public static final String FARM_HOTSPOTS = "farm-hotspots";
++    public static final String EXPLOITS_BLOCKED = "exploits-blocked";
++    public static final String ENTITIES_CLEANED = "entities-cleaned";
++
++    // Simple incrementing counters (not timing-based)
++    private final ConcurrentHashMap<String, AtomicLong> counters = new ConcurrentHashMap<>();
++
 +    private PerformanceMonitor(int reportInterval) {
 +        this.reportInterval = reportInterval;
 +
@@ -53,6 +66,16 @@
 +        timings.put(MOB_SPAWNING, new TimingData());
 +        timings.put(REDSTONE, new TimingData());
 +        timings.put(TICK_TOTAL, new TimingData());
++
++        // Initialize counter categories
++        counters.put(DAB_SKIPPED, new AtomicLong(0));
++        counters.put(BUDGET_DEFERRED, new AtomicLong(0));
++        counters.put(MERGES_THROTTLED, new AtomicLong(0));
++        counters.put(TNT_BATCHED, new AtomicLong(0));
++        counters.put(OBSERVERS_DEBOUNCED, new AtomicLong(0));
++        counters.put(FARM_HOTSPOTS, new AtomicLong(0));
++        counters.put(EXPLOITS_BLOCKED, new AtomicLong(0));
++        counters.put(ENTITIES_CLEANED, new AtomicLong(0));
 +    }
 +
 +    public static void init() {
@@ -125,12 +148,37 @@
 +    }
 +
 +    /**
++     * Increment a simple counter (not timing-based).
++     */
++    public void incrementCounter(String name) {
++        counters.computeIfAbsent(name, k -> new AtomicLong(0)).incrementAndGet();
++    }
++
++    /**
++     * Get and reset a counter value.
++     */
++    public long getAndResetCounter(String name) {
++        AtomicLong counter = counters.get(name);
++        if (counter == null) return 0;
++        return counter.getAndSet(0);
++    }
++
++    /**
++     * Get current counter value without resetting.
++     */
++    public long getCounter(String name) {
++        AtomicLong counter = counters.get(name);
++        return counter != null ? counter.get() : 0;
++    }
++
++    /**
 +     * Generate and log a performance report.
 +     */
 +    public void generateReport() {
 +        StringBuilder report = new StringBuilder();
 +        report.append("\n=== SurvivalCore Performance Report ===\n");
 +
++        report.append("\nTiming Breakdown:\n");
 +        for (Map.Entry<String, TimingData> entry : timings.entrySet()) {
 +            TimingSnapshot snap = entry.getValue().snapshotAndReset();
 +            if (snap.count == 0) continue;
@@ -141,6 +189,25 @@
 +                snap.maxMs(),
 +                snap.count));
 +        }
++
++        report.append("\nOptimization Stats:\n");
++        long dabSkipped = getAndResetCounter(DAB_SKIPPED);
++        long budgetDeferred = getAndResetCounter(BUDGET_DEFERRED);
++        long mergesThrottled = getAndResetCounter(MERGES_THROTTLED);
++        long tntBatched = getAndResetCounter(TNT_BATCHED);
++        long observersDebounced = getAndResetCounter(OBSERVERS_DEBOUNCED);
++        long farmHotspots = getAndResetCounter(FARM_HOTSPOTS);
++        long exploitsBlocked = getAndResetCounter(EXPLOITS_BLOCKED);
++        long entitiesCleaned = getAndResetCounter(ENTITIES_CLEANED);
++
++        if (dabSkipped > 0) report.append(String.format("  DAB entity ticks skipped: %d\n", dabSkipped));
++        if (budgetDeferred > 0) report.append(String.format("  Budget deferrals: %d\n", budgetDeferred));
++        if (mergesThrottled > 0) report.append(String.format("  Item merges throttled: %d\n", mergesThrottled));
++        if (tntBatched > 0) report.append(String.format("  TNT explosions batched: %d\n", tntBatched));
++        if (observersDebounced > 0) report.append(String.format("  Observers debounced: %d\n", observersDebounced));
++        if (farmHotspots > 0) report.append(String.format("  Farm hotspots detected: %d\n", farmHotspots));
++        if (exploitsBlocked > 0) report.append(String.format("  Exploits blocked: %d\n", exploitsBlocked));
++        if (entitiesCleaned > 0) report.append(String.format("  Entities cleaned up: %d\n", entitiesCleaned));
 +
 +        report.append("=======================================");
 +        LOGGER.info(report.toString());
