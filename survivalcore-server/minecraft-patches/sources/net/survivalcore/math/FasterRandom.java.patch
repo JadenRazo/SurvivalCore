@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/math/FasterRandom.java
-@@ -1,0 +_,80 @@
+@@ -1,0 +_,99 @@
 +package net.survivalcore.math;
 +
 +import java.util.random.RandomGenerator;
@@ -29,6 +29,25 @@
 +     * Returns Xoroshiro128PlusPlus by default (configurable).
 +     */
 +    public static RandomGenerator get() {
++        return THREAD_LOCAL_RANDOM.get();
++    }
++
++    /**
++     * Get a thread-local FasterRandom instance.
++     * This method provides a convenient way to use FasterRandom as a
++     * drop-in replacement for vanilla Random in mob spawning, loot tables,
++     * and ore generation.
++     *
++     * Integration points for wiring into Minecraft:
++     * - NaturalSpawner: Random position selection for mob spawning
++     * - LootTable: Random rolls for item drops
++     * - OreConfiguration: Random placement in world generation
++     *
++     * WARNING: Wiring this into the game requires careful testing to ensure
++     * seed consistency and reproducibility. Use only where determinism
++     * is not required (e.g., runtime mob spawning, not world generation).
++     */
++    public static RandomGenerator getThreadLocal() {
 +        return THREAD_LOCAL_RANDOM.get();
 +    }
 +

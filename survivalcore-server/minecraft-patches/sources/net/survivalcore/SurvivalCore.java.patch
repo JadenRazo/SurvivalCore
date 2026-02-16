@@ -1,18 +1,23 @@
 --- /dev/null
 +++ b/net/survivalcore/SurvivalCore.java
-@@ -1,0 +_,194 @@
+@@ -1,0 +_,218 @@
 +package net.survivalcore;
 +
 +import java.nio.file.Path;
 +import java.util.logging.Logger;
 +import net.survivalcore.admin.ActionLogger;
++import net.survivalcore.api.APIBridge;
++import net.survivalcore.async.AsyncChunkIO;
 +import net.survivalcore.async.AsyncEntityTracker;
 +import net.survivalcore.async.AsyncMobSpawner;
 +import net.survivalcore.async.AsyncPathfinder;
 +import net.survivalcore.async.ChunkPreloader;
 +import net.survivalcore.config.SurvivalCoreConfig;
++import net.survivalcore.config.WorldConfigManager;
 +import net.survivalcore.monitoring.EntityReport;
 +import net.survivalcore.monitoring.PerformanceMonitor;
++import net.survivalcore.monitoring.SparkIntegration;
++import net.survivalcore.optimization.FastLighting;
 +import net.survivalcore.survival.EntityCleanup;
 +import net.survivalcore.survival.EntityTickBudget;
 +import net.survivalcore.survival.FarmDetector;
@@ -55,16 +60,24 @@
 +        SurvivalCoreConfig.init(serverRoot);
 +        SurvivalCoreConfig config = SurvivalCoreConfig.get();
 +
++        // 1b. Initialize per-world config manager
++        WorldConfigManager.init(serverRoot);
++
 +        // 2. Initialize async thread pools
 +        AsyncEntityTracker.init();
 +        AsyncPathfinder.init();
 +        AsyncMobSpawner.init();
++        AsyncChunkIO.init();
 +
-+        // 3. Initialize monitoring
++        // 3. Initialize optimization systems
++        FastLighting.init();
++
++        // 4. Initialize monitoring
 +        PerformanceMonitor.init();
 +        EntityReport.init();
++        SparkIntegration.init();
 +
-+        // 4. Initialize survival systems
++        // 5. Initialize survival systems
 +        EntityTickBudget.init();
 +        FarmDetector.init();
 +        ObserverDebounce.init();
@@ -73,10 +86,10 @@
 +        EntityCleanup.init();
 +        ChunkPreloader.init();
 +
-+        // 5. Initialize action logging
++        // 6. Initialize action logging
 +        ActionLogger.init();
 +
-+        // 6. Log SIMD status
++        // 7. Log SIMD status
 +        if (config.simdEnabled) {
 +            try {
 +                Class.forName("jdk.incubator.vector.FloatVector");
@@ -86,14 +99,16 @@
 +            }
 +        }
 +
-+        // 7. Log configuration summary
++        // 8. Log configuration summary
 +        LOGGER.info("=== Async Systems ===");
 +        LOGGER.info("  Entity tracking: " + (config.asyncEntityTrackerEnabled ? "ON (" + config.resolveEntityTrackerThreads() + " threads)" : "OFF"));
 +        LOGGER.info("  Pathfinding: " + (config.asyncPathfindingEnabled ? "ON (" + config.resolvePathfindingThreads() + " threads)" : "OFF"));
 +        LOGGER.info("  Mob spawning: " + (config.asyncMobSpawningEnabled ? "ON" : "OFF"));
++        LOGGER.info("  Chunk I/O: " + (config.asyncChunkIOEnabled ? "ON (" + config.asyncChunkIOThreads + " threads)" : "OFF"));
 +
 +        LOGGER.info("=== Performance ===");
 +        LOGGER.info("  FastMath: " + (config.fastMathEnabled ? "ON" : "OFF"));
++        LOGGER.info("  Fast lighting: " + (config.fastLightingEnabled ? "ON (batch: " + config.fastLightingBatchSize + ", budget: " + config.fastLightingTickBudgetMs + "ms)" : "OFF"));
 +        LOGGER.info("  Hopper optimization: " + (config.hopperOptimizedCaching ? "ON" : "OFF"));
 +        LOGGER.info("  Entity AI throttling: " + (config.entityAiGoalSelectorThrottle ? "ON" : "OFF"));
 +        LOGGER.info("  DAB (Distance-Activation-Behavior): " + (config.dabEnabled ? "ON (start: " + config.dabStartDistance + " chunks, max interval: " + config.dabMaxTickInterval + ")" : "OFF"));
@@ -131,6 +146,9 @@
 +        int cores = Runtime.getRuntime().availableProcessors();
 +        LOGGER.info("Available CPU cores: " + cores);
 +
++        // 9. Initialize plugin API
++        APIBridge.init();
++
 +        initialized = true;
 +        LOGGER.info(NAME + " initialization complete");
 +    }
@@ -146,8 +164,10 @@
 +
 +        LOGGER.info("Reloading " + NAME + " configuration...");
 +        SurvivalCoreConfig.init(serverRoot);
++        WorldConfigManager.get().reload();
 +
 +        // Re-init subsystems that read config at init time
++        FastLighting.init();
 +        EntityTickBudget.init();
 +        FarmDetector.init();
 +        ObserverDebounce.init();
@@ -176,6 +196,9 @@
 +        }
 +        if (AsyncMobSpawner.isEnabled()) {
 +            AsyncMobSpawner.get().shutdown();
++        }
++        if (AsyncChunkIO.isEnabled()) {
++            AsyncChunkIO.get().shutdown();
 +        }
 +
 +        // Final performance report

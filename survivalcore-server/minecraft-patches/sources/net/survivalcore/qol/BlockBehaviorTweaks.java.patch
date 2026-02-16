@@ -1,0 +1,71 @@
+--- /dev/null
++++ b/net/survivalcore/qol/BlockBehaviorTweaks.java
+@@ -1,0 +_,68 @@
++package net.survivalcore.qol;
++
++import net.survivalcore.config.SurvivalCoreConfig;
++
++/**
++ * Block behavior customization.
++ *
++ * Controls:
++ * - Concrete powder solidifies in rain
++ * - Sponge absorbs lava
++ * - Writable book page limit
++ * - Sign max line count
++ * - Right-click sign editing
++ * - Note block audible range
++ * - Farmland moisture range
++ */
++public final class BlockBehaviorTweaks {
++
++    private static BlockBehaviorTweaks instance;
++
++    public final boolean concreteSolidifiesInRain;
++    public final boolean spongeAbsorbsLava;
++    public final int bookPageLimit;
++    public final int signMaxLines;
++    public final boolean signRightClickEdit;
++    public final int noteBlockRange;
++    public final int farmlandMoistureRange;
++
++    private BlockBehaviorTweaks() {
++        SurvivalCoreConfig config = SurvivalCoreConfig.get();
++        this.concreteSolidifiesInRain = config.qolBlocksConcreteSolidifiesInRain;
++        this.spongeAbsorbsLava = config.qolBlocksSpongeAbsorbsLava;
++        this.bookPageLimit = config.qolBlocksBookPageLimit;
++        this.signMaxLines = config.qolBlocksSignMaxLines;
++        this.signRightClickEdit = config.qolBlocksSignRightClickEdit;
++        this.noteBlockRange = config.qolBlocksNoteBlockRange;
++        this.farmlandMoistureRange = config.qolBlocksFarmlandMoistureRange;
++    }
++
++    public static void init() {
++        if (instance == null) {
++            instance = new BlockBehaviorTweaks();
++        }
++    }
++
++    public static BlockBehaviorTweaks get() {
++        if (instance == null) {
++            throw new IllegalStateException("BlockBehaviorTweaks not initialized");
++        }
++        return instance;
++    }
++
++    public boolean shouldConcreteSolidify(boolean isRaining) {
++        return concreteSolidifiesInRain && isRaining;
++    }
++
++    public boolean canSpongeAbsorbLava() {
++        return spongeAbsorbsLava;
++    }
++
++    public int getBookPageLimit() {
++        return bookPageLimit;
++    }
++
++    public int getNoteBlockRange() {
++        return noteBlockRange;
++    }
++}

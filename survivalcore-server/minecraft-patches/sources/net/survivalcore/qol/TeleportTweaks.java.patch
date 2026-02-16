@@ -1,0 +1,83 @@
+--- /dev/null
++++ b/net/survivalcore/qol/TeleportTweaks.java
+@@ -1,0 +_,80 @@
++package net.survivalcore.qol;
++
++import net.survivalcore.config.SurvivalCoreConfig;
++
++/**
++ * Teleportation mechanics customization.
++ *
++ * Ender Pearls:
++ * - Configurable cooldown
++ * - Toggle landing damage
++ * - Configurable damage amount
++ *
++ * Chorus Fruit:
++ * - Configurable teleport range
++ * - Configurable cooldown
++ *
++ * Nether Portals:
++ * - Portal cooldown
++ * - Link distance multiplier
++ * - Search radius for portal matching
++ */
++public final class TeleportTweaks {
++
++    private static TeleportTweaks instance;
++
++    // Ender pearls
++    public final int enderPearlCooldownTicks;
++    public final boolean enderPearlDamage;
++    public final double enderPearlDamageAmount;
++
++    // Chorus fruit
++    public final double chorusFruitRange;
++    public final int chorusFruitCooldownTicks;
++
++    // Nether portals
++    public final int portalCooldownTicks;
++    public final int portalSearchRadius;
++    public final int portalCreateRadius;
++
++    private TeleportTweaks() {
++        SurvivalCoreConfig config = SurvivalCoreConfig.get();
++        this.enderPearlCooldownTicks = config.qolEnderPearlsCooldownTicks;
++        this.enderPearlDamage = config.qolEnderPearlsLandingDamage;
++        this.enderPearlDamageAmount = config.qolEnderPearlsDamageAmount;
++        this.chorusFruitRange = config.qolChorusFruitRange;
++        this.chorusFruitCooldownTicks = config.qolChorusFruitCooldownTicks;
++        this.portalCooldownTicks = config.qolPortalsCooldownTicks;
++        this.portalSearchRadius = config.qolPortalsSearchRadius;
++        this.portalCreateRadius = config.qolPortalsCreateRadius;
++    }
++
++    public static void init() {
++        if (instance == null) {
++            instance = new TeleportTweaks();
++        }
++    }
++
++    public static TeleportTweaks get() {
++        if (instance == null) {
++            throw new IllegalStateException("TeleportTweaks not initialized");
++        }
++        return instance;
++    }
++
++    public int getEnderPearlCooldown() {
++        return enderPearlCooldownTicks;
++    }
++
++    public boolean shouldDealPearlDamage() {
++        return enderPearlDamage;
++    }
++
++    public double getChorusRange() {
++        return chorusFruitRange;
++    }
++
++    public int getPortalSearchRadius() {
++        return portalSearchRadius;
++    }
++}

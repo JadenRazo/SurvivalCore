@@ -1,0 +1,131 @@
+--- /dev/null
++++ b/net/survivalcore/api/SurvivalCoreAPI.java
+@@ -1,0 +_,128 @@
++package net.survivalcore.api;
++
++import net.survivalcore.api.config.SurvivalCoreConfigAPI;
++import net.survivalcore.api.entity.EntityUtils;
++import net.survivalcore.api.metrics.PerformanceMetrics;
++
++/**
++ * Main entry point for the SurvivalCore Plugin API.
++ *
++ * Provides read-only access to SurvivalCore's configuration,
++ * performance metrics, and entity management systems.
++ *
++ * <p>Usage example:
++ * <pre>
++ * SurvivalCoreAPI api = SurvivalCoreAPI.getInstance();
++ * boolean farmDetection = api.isFeatureEnabled("farm-detection");
++ * double tps = api.getMetrics().getAverageTps();
++ * </pre>
++ *
++ * <p>This API provides a stable interface for plugins to interact with
++ * SurvivalCore features without depending on internal implementation details.
++ */
++public final class SurvivalCoreAPI {
++
++    private static volatile SurvivalCoreAPI instance;
++
++    // Lazy-initialized references to internal subsystems
++    private PerformanceMetrics metrics;
++    private SurvivalCoreConfigAPI configAPI;
++    private EntityUtils entityUtils;
++
++    private SurvivalCoreAPI() {}
++
++    /**
++     * Get the singleton SurvivalCore API instance.
++     *
++     * @return the API instance
++     * @throws IllegalStateException if SurvivalCore is not initialized
++     */
++    public static SurvivalCoreAPI getInstance() {
++        if (instance == null) {
++            throw new IllegalStateException("SurvivalCore API not initialized");
++        }
++        return instance;
++    }
++
++    /**
++     * Check if the SurvivalCore API is available.
++     *
++     * @return true if initialized and ready
++     */
++    public static boolean isAvailable() {
++        return instance != null;
++    }
++
++    /**
++     * Get performance metrics access.
++     *
++     * @return metrics interface
++     */
++    public PerformanceMetrics getMetrics() {
++        if (metrics == null) {
++            throw new IllegalStateException("Metrics subsystem not initialized");
++        }
++        return metrics;
++    }
++
++    /**
++     * Get configuration access.
++     *
++     * @return config interface
++     */
++    public SurvivalCoreConfigAPI getConfig() {
++        if (configAPI == null) {
++            throw new IllegalStateException("Config subsystem not initialized");
++        }
++        return configAPI;
++    }
++
++    /**
++     * Get entity utility methods.
++     *
++     * @return entity utils interface
++     */
++    public EntityUtils getEntityUtils() {
++        if (entityUtils == null) {
++            throw new IllegalStateException("Entity utils subsystem not initialized");
++        }
++        return entityUtils;
++    }
++
++    /**
++     * Get the SurvivalCore version string.
++     *
++     * @return version (e.g., "1.0.0")
++     */
++    public String getVersion() {
++        return net.survivalcore.SurvivalCore.VERSION;
++    }
++
++    /**
++     * Convenience method to check if a feature is enabled.
++     *
++     * @param featureName the feature name (e.g., "farm-detection", "async-pathfinding")
++     * @return true if enabled
++     */
++    public boolean isFeatureEnabled(String featureName) {
++        return getConfig().isFeatureEnabled(featureName);
++    }
++
++    // ── Package-private initialization methods ────────────────────────
++
++    static void setInstance(SurvivalCoreAPI api) {
++        instance = api;
++    }
++
++    void setMetrics(PerformanceMetrics metrics) {
++        this.metrics = metrics;
++    }
++
++    void setConfigAPI(SurvivalCoreConfigAPI configAPI) {
++        this.configAPI = configAPI;
++    }
++
++    void setEntityUtils(EntityUtils entityUtils) {
++        this.entityUtils = entityUtils;
++    }
++}

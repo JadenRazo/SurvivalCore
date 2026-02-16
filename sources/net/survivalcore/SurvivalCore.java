@@ -2,11 +2,20 @@ package net.survivalcore;
 
 import java.nio.file.Path;
 import java.util.logging.Logger;
+import net.survivalcore.admin.ActionLogger;
 import net.survivalcore.async.AsyncEntityTracker;
 import net.survivalcore.async.AsyncMobSpawner;
 import net.survivalcore.async.AsyncPathfinder;
+import net.survivalcore.async.ChunkPreloader;
 import net.survivalcore.config.SurvivalCoreConfig;
+import net.survivalcore.monitoring.EntityReport;
 import net.survivalcore.monitoring.PerformanceMonitor;
+import net.survivalcore.survival.EntityCleanup;
+import net.survivalcore.survival.EntityTickBudget;
+import net.survivalcore.survival.FarmDetector;
+import net.survivalcore.survival.ObserverDebounce;
+import net.survivalcore.survival.TNTBatcher;
+import net.survivalcore.survival.TickCoalescer;
 
 /**
  * SurvivalCore bootstrap and lifecycle manager.
@@ -22,6 +31,7 @@ public final class SurvivalCore {
     public static final String NAME = "SurvivalCore";
     public static final String VERSION = "1.0.0";
     private static boolean initialized = false;
+    private static Path serverRootPath = null;
 
     private SurvivalCore() {}
 
@@ -33,12 +43,14 @@ public final class SurvivalCore {
      */
     public static void init(Path serverRoot) {
         if (initialized) return;
+        serverRootPath = serverRoot;
 
         LOGGER.info("Starting " + NAME + " v" + VERSION);
         LOGGER.info("Custom performance fork - https://gitlab.com/JadenRazo/SurvivalCore");
 
         // 1. Load configuration first (everything else depends on it)
         SurvivalCoreConfig.init(serverRoot);
+        SurvivalCoreConfig config = SurvivalCoreConfig.get();
 
         // 2. Initialize async thread pools
         AsyncEntityTracker.init();
@@ -47,9 +59,22 @@ public final class SurvivalCore {
 
         // 3. Initialize monitoring
         PerformanceMonitor.init();
+        EntityReport.init();
 
-        // 4. Log SIMD status
-        if (SurvivalCoreConfig.get().simdEnabled) {
+        // 4. Initialize survival systems
+        EntityTickBudget.init();
+        FarmDetector.init();
+        ObserverDebounce.init();
+        TNTBatcher.init();
+        TickCoalescer.init();
+        EntityCleanup.init();
+        ChunkPreloader.init();
+
+        // 5. Initialize action logging
+        ActionLogger.init();
+
+        // 6. Log SIMD status
+        if (config.simdEnabled) {
             try {
                 Class.forName("jdk.incubator.vector.FloatVector");
                 LOGGER.info("SIMD Vector API: available");
@@ -58,22 +83,77 @@ public final class SurvivalCore {
             }
         }
 
-        // 5. Log configuration summary
-        SurvivalCoreConfig config = SurvivalCoreConfig.get();
-        LOGGER.info("Async entity tracking: " + (config.asyncEntityTrackerEnabled ? "ON (" + config.resolveEntityTrackerThreads() + " threads)" : "OFF"));
-        LOGGER.info("Async pathfinding: " + (config.asyncPathfindingEnabled ? "ON (" + config.resolvePathfindingThreads() + " threads)" : "OFF"));
-        LOGGER.info("Async mob spawning: " + (config.asyncMobSpawningEnabled ? "ON" : "OFF"));
-        LOGGER.info("FastMath: " + (config.fastMathEnabled ? "ON" : "OFF"));
-        LOGGER.info("Hopper optimization: " + (config.hopperOptimizedCaching ? "ON" : "OFF"));
-        LOGGER.info("Entity AI throttling: " + (config.entityAiGoalSelectorThrottle ? "ON" : "OFF"));
-        LOGGER.info("Object pooling: " + (config.objectPoolingEnabled ? "ON" : "OFF"));
-        LOGGER.info("Redstone: " + config.redstoneImplementation);
+        // 7. Log configuration summary
+        LOGGER.info("=== Async Systems ===");
+        LOGGER.info("  Entity tracking: " + (config.asyncEntityTrackerEnabled ? "ON (" + config.resolveEntityTrackerThreads() + " threads)" : "OFF"));
+        LOGGER.info("  Pathfinding: " + (config.asyncPathfindingEnabled ? "ON (" + config.resolvePathfindingThreads() + " threads)" : "OFF"));
+        LOGGER.info("  Mob spawning: " + (config.asyncMobSpawningEnabled ? "ON" : "OFF"));
+
+        LOGGER.info("=== Performance ===");
+        LOGGER.info("  FastMath: " + (config.fastMathEnabled ? "ON" : "OFF"));
+        LOGGER.info("  Hopper optimization: " + (config.hopperOptimizedCaching ? "ON" : "OFF"));
+        LOGGER.info("  Entity AI throttling: " + (config.entityAiGoalSelectorThrottle ? "ON" : "OFF"));
+        LOGGER.info("  DAB (Distance-Activation-Behavior): " + (config.dabEnabled ? "ON (start: " + config.dabStartDistance + " chunks, max interval: " + config.dabMaxTickInterval + ")" : "OFF"));
+        LOGGER.info("  Entity budgets: " + (config.entityBudgetsEnabled ? "ON (" + config.entityBudgetsMaxEntityTimeMs + "ms)" : "OFF"));
+        LOGGER.info("  Item merge throttle: " + (config.itemMergeThrottleEnabled ? "ON (" + config.itemMergeCooldownTicks + " tick cooldown)" : "OFF"));
+        LOGGER.info("  Farm detection: " + (config.farmDetectionEnabled ? "ON (soft: " + config.farmSoftThreshold + ", hard: " + config.farmHardThreshold + ", critical: " + config.farmCriticalThreshold + ")" : "OFF"));
+        LOGGER.info("  TNT batching: " + (config.tntBatchingEnabled ? "ON (radius: " + config.tntGroupRadius + ")" : "OFF"));
+        LOGGER.info("  Object pooling: " + (config.objectPoolingEnabled ? "ON" : "OFF"));
+
+        LOGGER.info("=== Redstone ===");
+        LOGGER.info("  Implementation: " + config.redstoneImplementation);
+        LOGGER.info("  Observer debounce: " + (config.observerDebounceEnabled ? "ON (" + config.observerDebounceMinIntervalTicks + " tick min)" : "OFF"));
+
+        LOGGER.info("=== Survival ===");
+        LOGGER.info("  Entity cleanup: " + (config.entityCleanupEnabled ? "ON (soft: " + config.entityCleanupSoftLimit + ", hard: " + config.entityCleanupHardLimit + ")" : "OFF"));
+
+        LOGGER.info("=== Exploit Fixes ===");
+        LOGGER.info("  Ender pearl border bypass: " + (config.fixEnderPearlBorderBypass ? "FIXED" : "vanilla"));
+        LOGGER.info("  Chorus fruit wall phase: " + (config.fixChorusFruitWallPhase ? "FIXED" : "vanilla"));
+        LOGGER.info("  Headless piston: " + (config.fixHeadlessPiston ? "FIXED" : "vanilla"));
+        LOGGER.info("  Bed explosions: " + (config.fixBedExplosions ? "vanilla" : "DISABLED"));
+        LOGGER.info("  Portal trap protection: " + (config.fixPortalTrapProtection ? "ON" : "OFF"));
+        LOGGER.info("  TNT dupe limit: " + (config.fixTntDupeLimit == 0 ? "DISABLED" : config.fixTntDupeLimit + " per tick"));
+
+        LOGGER.info("=== Quality of Life ===");
+        LOGGER.info("  Single player sleep: " + (config.qolSinglePlayerSleep ? "ON" : "OFF"));
+        LOGGER.info("  Player head drops: " + (config.qolPlayerHeadDropsEnabled ? "ON (" + (config.qolPlayerHeadDropsChance * 100) + "%)" : "OFF"));
+        LOGGER.info("  Item despawn time: " + config.qolItemDespawnTimeTicks + " ticks");
+        LOGGER.info("  Exp multiplier: " + config.qolExpMultiplier + "x");
+
+        LOGGER.info("=== Admin Tools ===");
+        LOGGER.info("  Auto cleanup: " + (config.adminAutoCleanupEnabled ? "ON (items: " + config.adminAutoCleanupMaxItemsPerChunk + "/chunk, minecarts: " + config.adminAutoCleanupMaxMinecartsPerChunk + "/chunk)" : "OFF"));
+        LOGGER.info("  Action logging: " + (config.adminLogExplosions || config.adminLogFireSpread || config.adminLogEntityDamage ? "ON" : "OFF"));
 
         int cores = Runtime.getRuntime().availableProcessors();
         LOGGER.info("Available CPU cores: " + cores);
 
         initialized = true;
         LOGGER.info(NAME + " initialization complete");
+    }
+
+    /**
+     * Reload the configuration and re-initialize subsystems that read config at init time.
+     */
+    public static void reload(Path serverRoot) {
+        if (!initialized) {
+            LOGGER.warning("Cannot reload: SurvivalCore not initialized");
+            return;
+        }
+
+        LOGGER.info("Reloading " + NAME + " configuration...");
+        SurvivalCoreConfig.init(serverRoot);
+
+        // Re-init subsystems that read config at init time
+        EntityTickBudget.init();
+        FarmDetector.init();
+        ObserverDebounce.init();
+        TNTBatcher.init();
+        TickCoalescer.init();
+        EntityCleanup.init();
+        ActionLogger.init();
+
+        LOGGER.info("Configuration reloaded successfully");
     }
 
     /**
@@ -106,5 +186,9 @@ public final class SurvivalCore {
 
     public static boolean isInitialized() {
         return initialized;
+    }
+
+    public static Path getServerRoot() {
+        return serverRootPath;
     }
 }

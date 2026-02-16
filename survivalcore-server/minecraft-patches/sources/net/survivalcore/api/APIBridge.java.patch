@@ -1,0 +1,136 @@
+--- /dev/null
++++ b/net/survivalcore/api/APIBridge.java
+@@ -1,0 +_,133 @@
++package net.survivalcore.api;
++
++import net.survivalcore.api.config.SurvivalCoreConfigAPI;
++import net.survivalcore.api.entity.EntityUtils;
++import net.survivalcore.api.events.EntityBudgetExceededEvent;
++import net.survivalcore.api.events.ExploitBlockedEvent;
++import net.survivalcore.api.events.FarmDetectedEvent;
++import net.survivalcore.api.metrics.PerformanceMetrics;
++import org.bukkit.Bukkit;
++
++import java.util.UUID;
++import java.util.logging.Logger;
++
++/**
++ * Bridge between the public API and internal SurvivalCore systems.
++ *
++ * <p>This class initializes API instances and provides static methods
++ * for firing Bukkit events from internal systems.
++ *
++ * <p><strong>Future:</strong> When SurvivalCore is split into separate modules
++ * (api + server), this bridge will be replaced with a cleaner module boundary.
++ * For now, it lives in the server source patches alongside the API classes.
++ */
++public final class APIBridge {
++
++    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
++    private static boolean initialized = false;
++
++    private APIBridge() {}
++
++    /**
++     * Initialize the SurvivalCore API.
++     *
++     * <p>Called from SurvivalCore.init() after all subsystems are ready.
++     * Wires up the API instances to internal implementations.
++     */
++    public static void init() {
++        if (initialized) {
++            LOGGER.warning("SurvivalCore API already initialized");
++            return;
++        }
++
++        LOGGER.info("Initializing SurvivalCore Plugin API...");
++
++        // Create API instance
++        SurvivalCoreAPI api = new SurvivalCoreAPI();
++
++        // Wire up subsystem interfaces
++        api.setMetrics(new PerformanceMetrics());
++        api.setConfigAPI(new SurvivalCoreConfigAPI());
++        api.setEntityUtils(new EntityUtils());
++
++        // Set as singleton instance
++        SurvivalCoreAPI.setInstance(api);
++
++        initialized = true;
++        LOGGER.info("SurvivalCore API initialized successfully");
++    }
++
++    /**
++     * Fire a FarmDetectedEvent.
++     *
++     * <p>Called from FarmDetector when a chunk exceeds a threshold.
++     *
++     * @param chunkX      chunk X coordinate
++     * @param chunkZ      chunk Z coordinate
++     * @param worldName   world name
++     * @param entityCount number of entities in the chunk
++     * @param threshold   which threshold was hit
++     * @return true if the event was cancelled
++     */
++    public static boolean fireFarmDetectedEvent(int chunkX, int chunkZ, String worldName,
++                                                 int entityCount, FarmDetectedEvent.ThrottleLevel threshold) {
++        if (!initialized) return false;
++
++        FarmDetectedEvent event = new FarmDetectedEvent(chunkX, chunkZ, worldName, entityCount, threshold);
++        Bukkit.getPluginManager().callEvent(event);
++
++        return event.isCancelled();
++    }
++
++    /**
++     * Fire an EntityBudgetExceededEvent.
++     *
++     * <p>Called from EntityTickBudget when the per-tick budget is exhausted.
++     *
++     * @param processed number of entities processed
++     * @param deferred  number of entities deferred
++     * @param budgetMs  configured budget in milliseconds
++     * @param actualMs  actual time spent in milliseconds
++     */
++    public static void fireEntityBudgetExceededEvent(int processed, int deferred,
++                                                      long budgetMs, long actualMs) {
++        if (!initialized) return;
++
++        EntityBudgetExceededEvent event = new EntityBudgetExceededEvent(
++            processed, deferred, budgetMs, actualMs
++        );
++        Bukkit.getPluginManager().callEvent(event);
++    }
++
++    /**
++     * Fire an ExploitBlockedEvent.
++     *
++     * <p>Called from exploit fix patches when an exploit is blocked.
++     *
++     * @param exploitType type of exploit (e.g., "ender-pearl-bypass")
++     * @param playerName  player name, or null if no player
++     * @param playerUuid  player UUID, or null if no player
++     * @param x           X coordinate
++     * @param y           Y coordinate
++     * @param z           Z coordinate
++     * @param worldName   world name
++     */
++    public static void fireExploitBlockedEvent(String exploitType, String playerName, UUID playerUuid,
++                                                double x, double y, double z, String worldName) {
++        if (!initialized) return;
++
++        ExploitBlockedEvent event = new ExploitBlockedEvent(
++            exploitType, playerName, playerUuid, x, y, z, worldName
++        );
++        Bukkit.getPluginManager().callEvent(event);
++    }
++
++    /**
++     * Check if the API is initialized and ready.
++     *
++     * @return true if initialized
++     */
++    public static boolean isInitialized() {
++        return initialized;
++    }
++}

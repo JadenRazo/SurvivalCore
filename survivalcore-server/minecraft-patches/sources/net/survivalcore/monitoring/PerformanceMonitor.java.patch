@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/monitoring/PerformanceMonitor.java
-@@ -1,0 +_,268 @@
+@@ -1,0 +_,349 @@
 +package net.survivalcore.monitoring;
 +
 +import java.util.Map;
@@ -30,6 +30,14 @@
 +    private final Map<String, TimingData> timings = new ConcurrentHashMap<>();
 +    private final int reportInterval;
 +    private int ticksSinceReport = 0;
++
++    // Lagspike tracking
++    private final LagSpikeData[] lagspikes = new LagSpikeData[50];
++    private int lagspikeIndex = 0;
++    private int lagspikeCount = 0;
++    private long currentTickNumber = 0;
++    private static final int MAX_LAGSPIKES = 50;
++    private static final long LAGSPIKE_THRESHOLD_MS = 100; // configurable in future
 +
 +    // Pre-defined timing categories
 +    public static final String ENTITIES = "entities";
@@ -129,6 +137,14 @@
 +     * Called once per server tick to check if we should generate a report.
 +     */
 +    public void tick() {
++        currentTickNumber++;
++
++        // Check for lagspike on this tick
++        TimingSnapshot tickTotal = getSnapshot(TICK_TOTAL);
++        if (tickTotal.count > 0 && tickTotal.maxMs() >= LAGSPIKE_THRESHOLD_MS) {
++            recordLagspike(tickTotal.maxNanos);
++        }
++
 +        if (reportInterval <= 0) return;
 +
 +        ticksSinceReport++;
@@ -136,6 +152,66 @@
 +            ticksSinceReport = 0;
 +            generateReport();
 +        }
++    }
++
++    /**
++     * Record a lagspike with probable cause detection.
++     */
++    private void recordLagspike(long durationNanos) {
++        double durationMs = durationNanos / 1_000_000.0;
++        String cause = detectLagspikeCause();
++
++        LagSpikeData spike = new LagSpikeData(currentTickNumber, durationMs, cause);
++        lagspikes[lagspikeIndex] = spike;
++        lagspikeIndex = (lagspikeIndex + 1) % MAX_LAGSPIKES;
++        if (lagspikeCount < MAX_LAGSPIKES) {
++            lagspikeCount++;
++        }
++    }
++
++    /**
++     * Detect the probable cause of a lagspike based on timing breakdown.
++     */
++    private String detectLagspikeCause() {
++        TimingSnapshot entities = getSnapshot(ENTITIES);
++        TimingSnapshot chunks = getSnapshot(CHUNKS);
++        TimingSnapshot redstone = getSnapshot(REDSTONE);
++        TimingSnapshot mobSpawning = getSnapshot(MOB_SPAWNING);
++        TimingSnapshot tickTotal = getSnapshot(TICK_TOTAL);
++
++        if (tickTotal.totalMs() == 0) return "Unknown";
++
++        double entitiesPercent = (entities.totalMs() / tickTotal.totalMs()) * 100;
++        double chunksPercent = (chunks.totalMs() / tickTotal.totalMs()) * 100;
++        double redstonePercent = (redstone.totalMs() / tickTotal.totalMs()) * 100;
++        double mobSpawningPercent = (mobSpawning.totalMs() / tickTotal.totalMs()) * 100;
++
++        if (entitiesPercent > 60) return "Entity processing";
++        if (chunksPercent > 60) return "Chunk operations";
++        if (redstonePercent > 60) return "Redstone";
++        if (mobSpawningPercent > 60) return "Mob spawning";
++        return "General/mixed";
++    }
++
++    /**
++     * Get recent lagspikes (circular buffer, may contain nulls).
++     */
++    public LagSpikeData[] getLagspikes() {
++        // Return a copy in chronological order (oldest to newest)
++        LagSpikeData[] result = new LagSpikeData[lagspikeCount];
++        if (lagspikeCount == 0) return result;
++
++        if (lagspikeCount < MAX_LAGSPIKES) {
++            // Haven't wrapped yet, just copy from start
++            System.arraycopy(lagspikes, 0, result, 0, lagspikeCount);
++        } else {
++            // Wrapped, copy in two parts to get chronological order
++            int firstPart = MAX_LAGSPIKES - lagspikeIndex;
++            System.arraycopy(lagspikes, lagspikeIndex, result, 0, firstPart);
++            System.arraycopy(lagspikes, 0, result, firstPart, lagspikeIndex);
++        }
++
++        return result;
 +    }
 +
 +    /**
@@ -268,4 +344,9 @@
 +            return totalNanos / 1_000_000.0;
 +        }
 +    }
++
++    /**
++     * Lagspike data record.
++     */
++    public record LagSpikeData(long tickNumber, double durationMs, String cause) {}
 +}

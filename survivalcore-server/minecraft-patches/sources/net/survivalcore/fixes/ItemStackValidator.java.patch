@@ -1,0 +1,142 @@
+--- /dev/null
++++ b/net/survivalcore/fixes/ItemStackValidator.java
+@@ -1,0 +_,139 @@
++package net.survivalcore.fixes;
++
++import java.util.Map;
++import java.util.logging.Logger;
++import net.minecraft.core.component.DataComponents;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.world.entity.player.Player;
++import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.item.enchantment.Enchantment;
++import net.minecraft.world.item.enchantment.ItemEnchantments;
++import net.survivalcore.config.SurvivalCoreConfig;
++
++/**
++ * Validates item stacks for illegal modifications.
++ * Detects oversized stacks, illegal enchantments, excessive NBT data, and invalid durability.
++ */
++public final class ItemStackValidator {
++
++    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
++    private static int violationsLogged = 0;
++
++    private ItemStackValidator() {}
++
++    /**
++     * Validation result container.
++     */
++    public static class ValidationResult {
++        private final boolean valid;
++        private final String reason;
++
++        private ValidationResult(boolean valid, String reason) {
++            this.valid = valid;
++            this.reason = reason;
++        }
++
++        public boolean isValid() {
++            return valid;
++        }
++
++        public String getReason() {
++            return reason;
++        }
++
++        public static ValidationResult valid() {
++            return new ValidationResult(true, null);
++        }
++
++        public static ValidationResult invalid(String reason) {
++            return new ValidationResult(false, reason);
++        }
++    }
++
++    /**
++     * Quick validation check.
++     * @param stack the item stack to check
++     * @return true if the stack is legal
++     */
++    public static boolean isStackLegal(ItemStack stack) {
++        if (!SurvivalCoreConfig.get().fixIllegalStacksEnabled) return true;
++        return validate(stack).isValid();
++    }
++
++    /**
++     * Detailed validation with reason.
++     * @param stack the item stack to validate
++     * @return validation result with reason if invalid
++     */
++    public static ValidationResult validate(ItemStack stack) {
++        if (!SurvivalCoreConfig.get().fixIllegalStacksEnabled) {
++            return ValidationResult.valid();
++        }
++
++        if (stack.isEmpty()) {
++            return ValidationResult.valid();
++        }
++
++        // Check 1: Stack size exceeds max
++        int maxStackSize = stack.getMaxStackSize();
++        if (stack.getCount() > maxStackSize) {
++            return ValidationResult.invalid("Stack size " + stack.getCount() + " exceeds max " + maxStackSize);
++        }
++
++        // Check 2: Enchantments above max level
++        ItemEnchantments enchantments = stack.get(DataComponents.ENCHANTMENTS);
++        if (enchantments != null) {
++            for (var entry : enchantments.entrySet()) {
++                int level = entry.getIntValue();
++                int maxLevel = entry.getKey().value().getMaxLevel();
++                if (level > maxLevel) {
++                    return ValidationResult.invalid("Enchantment level " + level + " exceeds max " + maxLevel);
++                }
++            }
++        }
++
++        // Check 3: NBT data size
++        CompoundTag tag = stack.getComponents().asPatch();
++        if (tag != null) {
++            int nbtSize = tag.sizeInBytes();
++            int maxNbtSize = SurvivalCoreConfig.get().fixIllegalStacksMaxNbtSize;
++            if (nbtSize > maxNbtSize) {
++                return ValidationResult.invalid("NBT size " + nbtSize + " bytes exceeds limit " + maxNbtSize);
++            }
++        }
++
++        // Check 4: Negative durability
++        if (stack.isDamageableItem()) {
++            int damage = stack.getDamageValue();
++            if (damage < 0) {
++                return ValidationResult.invalid("Negative durability value: " + damage);
++            }
++        }
++
++        return ValidationResult.valid();
++    }
++
++    /**
++     * Log an illegal stack violation.
++     * @param player the player holding the illegal stack
++     * @param stack the illegal item stack
++     * @param reason the validation failure reason
++     */
++    public static void logViolation(Player player, ItemStack stack, String reason) {
++        if (!SurvivalCoreConfig.get().fixIllegalStacksLogViolations) return;
++
++        violationsLogged++;
++        LOGGER.warning("[ItemStackValidator] Player " + player.getName().getString() +
++            " has illegal item: " + stack.getItem().toString() +
++            " | Reason: " + reason);
++    }
++
++    /**
++     * Get and reset violations counter for monitoring.
++     */
++    public static int getAndResetViolationsLogged() {
++        int count = violationsLogged;
++        violationsLogged = 0;
++        return count;
++    }
++}

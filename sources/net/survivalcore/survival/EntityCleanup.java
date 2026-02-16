@@ -1,0 +1,188 @@
+package net.survivalcore.survival;
+
+import net.survivalcore.config.SurvivalCoreConfig;
+import java.util.Set;
+import java.util.logging.Logger;
+
+/**
+ * Predictive entity cleanup with soft/hard limits and protected types.
+ *
+ * Prevents lag from excessive entity counts by accelerating despawn
+ * timers or forcing cleanup when limits are exceeded. Protected entity
+ * types (players, villagers, armor stands, etc.) are never cleaned up.
+ *
+ * Two-tier system:
+ * - Soft limit: Accelerate despawn for items, XP orbs, arrows
+ * - Hard limit: Force despawn non-protected entities
+ */
+public final class EntityCleanup {
+
+    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
+    private static EntityCleanup instance;
+
+    // Protected entity types (never cleaned up)
+    private static final Set<String> PROTECTED_TYPES = Set.of(
+        "Villager",
+        "Player",
+        "ArmorStand",
+        "Painting",
+        "ItemFrame",
+        "GlowItemFrame",
+        "LeashKnot",
+        "EndCrystal"
+    );
+
+    // Entities that can have accelerated despawn
+    private static final Set<String> DESPAWNABLE_TYPES = Set.of(
+        "Item",
+        "ExperienceOrb",
+        "Arrow",
+        "SpectralArrow",
+        "ThrownTrident",
+        "ThrownPotion",
+        "ThrownEgg",
+        "Snowball",
+        "FallingBlock"
+    );
+
+    private final boolean enabled;
+    private final int softLimit;
+    private final int hardLimit;
+    private long lastWarningTick = 0;
+
+    private EntityCleanup(SurvivalCoreConfig config) {
+        this.enabled = config.entityCleanupEnabled;
+        this.softLimit = config.entityCleanupSoftLimit;
+        this.hardLimit = config.entityCleanupHardLimit;
+    }
+
+    public static void init() {
+        SurvivalCoreConfig config = SurvivalCoreConfig.get();
+        instance = new EntityCleanup(config);
+
+        if (instance.enabled) {
+            LOGGER.info("Entity cleanup enabled: soft=" + config.entityCleanupSoftLimit
+                + ", hard=" + config.entityCleanupHardLimit);
+        } else {
+            LOGGER.info("Entity cleanup disabled");
+        }
+    }
+
+    public static EntityCleanup get() {
+        if (instance == null) {
+            throw new IllegalStateException("EntityCleanup not initialized");
+        }
+        return instance;
+    }
+
+    public static boolean isEnabled() {
+        return instance != null && instance.enabled;
+    }
+
+    /**
+     * Get the cleanup action to take based on current entity count.
+     *
+     * @param totalEntities current total entity count
+     * @return cleanup action to take
+     */
+    public CleanupAction getAction(int totalEntities) {
+        if (!enabled) return CleanupAction.NONE;
+
+        if (totalEntities >= hardLimit) {
+            return CleanupAction.FORCE_DESPAWN;
+        }
+        if (totalEntities >= softLimit) {
+            return CleanupAction.ACCELERATE_DESPAWN;
+        }
+        return CleanupAction.NONE;
+    }
+
+    /**
+     * Check if an entity type is protected from cleanup.
+     *
+     * @param entityClassName simple class name of entity
+     * @return true if protected
+     */
+    public boolean isProtected(String entityClassName) {
+        if (!enabled) return true;
+        return PROTECTED_TYPES.stream().anyMatch(entityClassName::contains);
+    }
+
+    /**
+     * Check if an entity type should have accelerated despawn.
+     *
+     * @param entityClassName simple class name of entity
+     * @return true if should accelerate despawn
+     */
+    public boolean shouldAccelerateDespawn(String entityClassName) {
+        if (!enabled) return false;
+        return DESPAWNABLE_TYPES.stream().anyMatch(entityClassName::contains);
+    }
+
+    /**
+     * Check if entity can be force-despawned under hard limit conditions.
+     *
+     * @param entityClassName simple class name of entity
+     * @return true if can be force-despawned
+     */
+    public boolean canForceDespawn(String entityClassName) {
+        if (!enabled) return false;
+        return !isProtected(entityClassName);
+    }
+
+    /**
+     * Log a warning when entity limits are exceeded.
+     *
+     * @param currentTick   current server tick
+     * @param totalEntities current entity count
+     * @param action        cleanup action being taken
+     */
+    public void logCleanupWarning(long currentTick, int totalEntities, CleanupAction action) {
+        if (!enabled) return;
+
+        // Log at most once per minute
+        if (currentTick - lastWarningTick < 1200) return;
+        lastWarningTick = currentTick;
+
+        LOGGER.warning(String.format(
+            "Entity limit exceeded: %d entities (soft: %d, hard: %d) - action: %s",
+            totalEntities, softLimit, hardLimit, action
+        ));
+    }
+
+    /**
+     * Get current stats for monitoring.
+     */
+    public CleanupStats getStats(int currentEntityCount) {
+        CleanupAction action = getAction(currentEntityCount);
+        double softPercent = (currentEntityCount * 100.0) / softLimit;
+        double hardPercent = (currentEntityCount * 100.0) / hardLimit;
+
+        return new CleanupStats(
+            currentEntityCount,
+            softLimit,
+            hardLimit,
+            action,
+            softPercent,
+            hardPercent
+        );
+    }
+
+    /**
+     * Cleanup actions based on entity count thresholds.
+     */
+    public enum CleanupAction {
+        NONE,
+        ACCELERATE_DESPAWN,
+        FORCE_DESPAWN
+    }
+
+    public record CleanupStats(
+        int currentEntities,
+        int softLimit,
+        int hardLimit,
+        CleanupAction action,
+        double softLimitPercent,
+        double hardLimitPercent
+    ) {}
+}

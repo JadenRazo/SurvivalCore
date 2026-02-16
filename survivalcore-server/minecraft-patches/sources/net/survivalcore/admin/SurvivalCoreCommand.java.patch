@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/admin/SurvivalCoreCommand.java
-@@ -1,0 +_,345 @@
+@@ -1,0 +_,605 @@
 +package net.survivalcore.admin;
 +
 +import java.util.ArrayList;
@@ -14,6 +14,8 @@
 +import net.survivalcore.SurvivalCore;
 +import net.survivalcore.config.PresetManager;
 +import net.survivalcore.monitoring.MonitorCommand;
++import net.survivalcore.monitoring.PerformanceMonitor;
++import net.survivalcore.monitoring.SparkIntegration;
 +import org.bukkit.Bukkit;
 +import org.bukkit.Location;
 +import org.bukkit.command.Command;
@@ -40,7 +42,7 @@
 +    public SurvivalCoreCommand(final String name) {
 +        super(name);
 +        this.description = "SurvivalCore management commands";
-+        this.usageMessage = "/survivalcore <monitor|preset|reload|version>";
++        this.usageMessage = "/survivalcore <monitor|preset|reload|version|profile|lagspike|entity|chunks|entities>";
 +
 +        // Register all permissions
 +        final List<String> permissions = List.of(
@@ -48,7 +50,12 @@
 +            PermissionNodes.MONITOR,
 +            PermissionNodes.PRESET,
 +            PermissionNodes.RELOAD,
-+            PermissionNodes.VERSION
++            PermissionNodes.VERSION,
++            PermissionNodes.PROFILE,
++            PermissionNodes.LAGSPIKE,
++            PermissionNodes.ENTITY,
++            PermissionNodes.CHUNKS,
++            PermissionNodes.ENTITIES
 +        );
 +        this.setPermission(String.join(";", permissions));
 +
@@ -97,6 +104,26 @@
 +                if (!checkPermission(sender, PermissionNodes.VERSION)) return true;
 +                return executeVersion(sender);
 +            }
++            case "profile" -> {
++                if (!checkPermission(sender, PermissionNodes.PROFILE)) return true;
++                return executeProfile(sender, args);
++            }
++            case "lagspike" -> {
++                if (!checkPermission(sender, PermissionNodes.LAGSPIKE)) return true;
++                return executeLagspike(sender);
++            }
++            case "entity" -> {
++                if (!checkPermission(sender, PermissionNodes.ENTITY)) return true;
++                return executeEntity(sender, args);
++            }
++            case "chunks" -> {
++                if (!checkPermission(sender, PermissionNodes.CHUNKS)) return true;
++                return executeChunks(sender, args);
++            }
++            case "entities" -> {
++                if (!checkPermission(sender, PermissionNodes.ENTITIES)) return true;
++                return executeEntities(sender, args);
++            }
 +            default -> {
 +                sender.sendMessage(
 +                    Component.text("Unknown subcommand: ", NamedTextColor.RED)
@@ -116,12 +143,12 @@
 +        final @Nullable Location location
 +    ) throws IllegalArgumentException {
 +        if (args.length == 0) {
-+            return List.of("monitor", "preset", "reload", "version");
++            return List.of("monitor", "preset", "reload", "version", "profile", "lagspike", "entity", "chunks", "entities");
 +        }
 +
 +        if (args.length == 1) {
 +            final String partial = args[0].toLowerCase(Locale.ENGLISH);
-+            return List.of("monitor", "preset", "reload", "version").stream()
++            return List.of("monitor", "preset", "reload", "version", "profile", "lagspike", "entity", "chunks", "entities").stream()
 +                .filter(cmd -> cmd.startsWith(partial))
 +                .toList();
 +        }
@@ -140,6 +167,21 @@
 +            return List.of("conservative", "balanced", "aggressive", "potato").stream()
 +                .filter(preset -> preset.startsWith(partial))
 +                .toList();
++        }
++
++        if (subcommand.equals("profile") && args.length == 2) {
++            final String partial = args[1].toLowerCase(Locale.ENGLISH);
++            return List.of("cpu", "memory", "tick").stream()
++                .filter(type -> type.startsWith(partial))
++                .toList();
++        }
++
++        if (subcommand.equals("entity")) {
++            return EntityCommands.tabComplete(sender, args);
++        }
++
++        if (subcommand.equals("chunks") || subcommand.equals("entities")) {
++            return PerformanceCommands.tabComplete(sender, args);
 +        }
 +
 +        return List.of();
@@ -293,6 +335,218 @@
 +        return true;
 +    }
 +
++    /**
++     * Execute /survivalcore profile <cpu|memory|tick> [duration]
++     */
++    private boolean executeProfile(final CommandSender sender, final String[] args) {
++        if (args.length < 2) {
++            sender.sendMessage(
++                Component.text("Usage: ", NamedTextColor.RED)
++                    .append(Component.text("/survivalcore profile <cpu|memory|tick> [duration]", NamedTextColor.GRAY))
++            );
++            sender.sendMessage(
++                Component.text("Duration: 10-600 seconds (default: 60)", NamedTextColor.GRAY)
++            );
++            return true;
++        }
++
++        final String profileType = args[1].toLowerCase(Locale.ENGLISH);
++        int duration = 60; // default
++
++        if (args.length >= 3) {
++            try {
++                duration = Integer.parseInt(args[2]);
++                if (duration < 10 || duration > 600) {
++                    sender.sendMessage(
++                        Component.text("Duration must be between 10 and 600 seconds", NamedTextColor.RED)
++                    );
++                    return true;
++                }
++            } catch (NumberFormatException e) {
++                sender.sendMessage(
++                    Component.text("Invalid duration: ", NamedTextColor.RED)
++                        .append(Component.text(args[2], NamedTextColor.GOLD))
++                );
++                return true;
++            }
++        }
++
++        // Check Spark availability
++        if (!SparkIntegration.isAvailable()) {
++            sender.sendMessage(
++                Component.text("✗ ", NamedTextColor.RED, TextDecoration.BOLD)
++                    .append(Component.text("Spark profiler not available", NamedTextColor.RED))
++            );
++            sender.sendMessage(
++                Component.text("Falling back to /survivalcore monitor", NamedTextColor.GRAY)
++            );
++            return executeMonitor(sender, new String[]{"monitor"});
++        }
++
++        boolean started = false;
++        switch (profileType) {
++            case "cpu" -> {
++                started = SparkIntegration.startCpuProfile(duration);
++                if (started) {
++                    sender.sendMessage(
++                        Component.text("✓ ", NamedTextColor.GREEN, TextDecoration.BOLD)
++                            .append(Component.text("Started CPU profiler for ", NamedTextColor.GREEN))
++                            .append(Component.text(duration + "s", NamedTextColor.GOLD))
++                    );
++                }
++            }
++            case "tick" -> {
++                started = SparkIntegration.startTickProfile(duration);
++                if (started) {
++                    sender.sendMessage(
++                        Component.text("✓ ", NamedTextColor.GREEN, TextDecoration.BOLD)
++                            .append(Component.text("Started tick profiler for ", NamedTextColor.GREEN))
++                            .append(Component.text(duration + "s", NamedTextColor.GOLD))
++                    );
++                }
++            }
++            case "memory" -> {
++                sender.sendMessage(
++                    Component.text("Memory profiling not yet implemented", NamedTextColor.YELLOW)
++                );
++                return true;
++            }
++            default -> {
++                sender.sendMessage(
++                    Component.text("Unknown profile type: ", NamedTextColor.RED)
++                        .append(Component.text(profileType, NamedTextColor.GOLD))
++                );
++                sender.sendMessage(
++                    Component.text("Available types: cpu, tick, memory", NamedTextColor.GRAY)
++                );
++                return true;
++            }
++        }
++
++        if (!started) {
++            sender.sendMessage(
++                Component.text("✗ ", NamedTextColor.RED, TextDecoration.BOLD)
++                    .append(Component.text("Failed to start profiler", NamedTextColor.RED))
++            );
++            sender.sendMessage(
++                Component.text("Check console for errors", NamedTextColor.GRAY)
++            );
++        }
++
++        return true;
++    }
++
++    /**
++     * Execute /survivalcore lagspike
++     */
++    private boolean executeLagspike(final CommandSender sender) {
++        if (!PerformanceMonitor.isEnabled()) {
++            sender.sendMessage(
++                Component.text("Performance monitoring is disabled", NamedTextColor.RED)
++            );
++            return true;
++        }
++
++        final PerformanceMonitor monitor = PerformanceMonitor.get();
++        final PerformanceMonitor.LagSpikeData[] lagspikes = monitor.getLagspikes();
++
++        if (lagspikes == null || lagspikes.length == 0) {
++            sender.sendMessage(
++                Component.text("No lagspikes recorded yet", NamedTextColor.GRAY)
++            );
++            return true;
++        }
++
++        sender.sendMessage(Component.empty());
++        sender.sendMessage(
++            Component.text("Recent Lagspikes", NamedTextColor.GOLD, TextDecoration.BOLD)
++        );
++        sender.sendMessage(Component.empty());
++
++        int shown = 0;
++        for (PerformanceMonitor.LagSpikeData spike : lagspikes) {
++            if (spike == null) continue;
++
++            sender.sendMessage(
++                Component.text("  • ", NamedTextColor.DARK_GRAY)
++                    .append(Component.text(String.format("%.1fms", spike.durationMs()), NamedTextColor.RED))
++                    .append(Component.text(" - ", NamedTextColor.DARK_GRAY))
++                    .append(Component.text(spike.cause(), NamedTextColor.YELLOW))
++                    .append(Component.text(" (tick ", NamedTextColor.DARK_GRAY))
++                    .append(Component.text(spike.tickNumber(), NamedTextColor.GRAY))
++                    .append(Component.text(")", NamedTextColor.DARK_GRAY))
++            );
++            shown++;
++        }
++
++        sender.sendMessage(Component.empty());
++        sender.sendMessage(
++            Component.text("Showing " + shown + " recent lagspikes", NamedTextColor.GRAY)
++        );
++
++        return true;
++    }
++
++    /**
++     * Execute /survivalcore entity [list|count|remove|freeze]
++     */
++    private boolean executeEntity(final CommandSender sender, final String[] args) {
++        if (args.length < 2) {
++            sender.sendMessage(
++                Component.text("Usage: ", NamedTextColor.RED)
++                    .append(Component.text("/survivalcore entity <list|count|remove|freeze>", NamedTextColor.GRAY))
++            );
++            return true;
++        }
++
++        final String subcommand = args[1].toLowerCase(Locale.ENGLISH);
++
++        switch (subcommand) {
++            case "list" -> EntityCommands.executeList(sender, args);
++            case "count" -> EntityCommands.executeCount(sender, args);
++            case "remove" -> EntityCommands.executeRemove(sender, args);
++            case "freeze" -> EntityCommands.executeFreeze(sender, args);
++            default -> sender.sendMessage(
++                Component.text("Unknown entity subcommand: ", NamedTextColor.RED)
++                    .append(Component.text(subcommand, NamedTextColor.GOLD))
++            );
++        }
++
++        return true;
++    }
++
++    /**
++     * Execute /survivalcore chunks top [n]
++     */
++    private boolean executeChunks(final CommandSender sender, final String[] args) {
++        if (args.length < 2 || !args[1].equalsIgnoreCase("top")) {
++            sender.sendMessage(
++                Component.text("Usage: ", NamedTextColor.RED)
++                    .append(Component.text("/survivalcore chunks top [n]", NamedTextColor.GRAY))
++            );
++            return true;
++        }
++
++        PerformanceCommands.executeChunksTop(sender, args);
++        return true;
++    }
++
++    /**
++     * Execute /survivalcore entities top [n]
++     */
++    private boolean executeEntities(final CommandSender sender, final String[] args) {
++        if (args.length < 2 || !args[1].equalsIgnoreCase("top")) {
++            sender.sendMessage(
++                Component.text("Usage: ", NamedTextColor.RED)
++                    .append(Component.text("/survivalcore entities top [n]", NamedTextColor.GRAY))
++            );
++            return true;
++        }
++
++        PerformanceCommands.executeEntitiesTop(sender, args);
++        return true;
++    }
++
 +    // ==================== Helper Methods ====================
 +
 +    /**
@@ -319,6 +573,11 @@
 +
 +        sendCommandHelp(sender, "/survivalcore reload", "Reload configuration from disk");
 +        sendCommandHelp(sender, "/survivalcore version", "Show version information");
++        sendCommandHelp(sender, "/survivalcore profile <type>", "Start Spark profiler (cpu|tick|memory)");
++        sendCommandHelp(sender, "/survivalcore lagspike", "View recent server lagspikes");
++        sendCommandHelp(sender, "/survivalcore entity <sub>", "Manage entities (list|count|remove|freeze)");
++        sendCommandHelp(sender, "/survivalcore chunks top [n]", "Show top N chunks by entity count");
++        sendCommandHelp(sender, "/survivalcore entities top [n]", "Show top N entity types by count");
 +
 +        sender.sendMessage(Component.empty());
 +    }

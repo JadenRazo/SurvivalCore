@@ -1,0 +1,171 @@
+--- /dev/null
++++ b/net/survivalcore/qol/EntityBehaviorControl.java
+@@ -1,0 +_,168 @@
++package net.survivalcore.qol;
++
++import java.util.logging.Logger;
++import net.survivalcore.config.SurvivalCoreConfig;
++
++/**
++ * Per-entity behavior controls — fine-grained toggles for mob behaviors.
++ * Expands on the existing MobGriefingControl to cover many more behaviors.
++ *
++ * Categories:
++ * - Block interaction: enderman pickup, zombie door breaking, etc.
++ * - Spawning: iron golem, cat, wandering trader spawning rates
++ * - AI behavior: skeleton accuracy, piglin aggro range, etc.
++ * - Villager: restocking, curing, conversion rates
++ * - Misc: parrot imitation, phantom spawn tweaks, etc.
++ */
++public final class EntityBehaviorControl {
++
++    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
++    private static EntityBehaviorControl instance;
++
++    // Block interaction controls
++    public final boolean endermanPickupBlocks;
++    public final boolean endermanPlaceBlocks;
++    public final boolean zombieDoorBreaking;
++    public final boolean silverfishEnterBlocks;
++    public final boolean snowGolemPlaceSnow;
++    public final boolean foxTrustBreeding;
++
++    // Spawning controls
++    public final boolean ironGolemNaturalSpawn;
++    public final boolean catNaturalSpawn;
++    public final boolean wanderingTraderSpawn;
++    public final int wanderingTraderSpawnChance;
++    public final boolean patrolSpawn;
++    public final int patrolSpawnChance;
++
++    // AI behavior controls
++    public final double skeletonAccuracyMultiplier;
++    public final double piglinAggroRange;
++    public final boolean zombieVillagerConversion;
++    public final double zombieVillagerConversionChance;
++    public final boolean villagerRestocking;
++    public final int villagerRestockIntervalTicks;
++    public final boolean villagerLobotomizeNoJobSite;
++
++    // Mob targeting controls
++    public final boolean phantomTargetSleepers;
++    public final boolean piglinBarterEnabled;
++    public final boolean zombifiedPiglinNeutral;
++    public final double witherSkullDamage;
++
++    // Misc controls
++    public final boolean parrotImitation;
++    public final boolean beeAngry;
++    public final double dolphinTreasureRange;
++
++    private EntityBehaviorControl(SurvivalCoreConfig config) {
++        // Block interaction
++        this.endermanPickupBlocks = config.qolEntityBehaviorEndermanPickup;
++        this.endermanPlaceBlocks = config.qolEntityBehaviorEndermanPlace;
++        this.zombieDoorBreaking = config.qolEntityBehaviorZombieDoorBreak;
++        this.silverfishEnterBlocks = config.qolEntityBehaviorSilverfishEnterBlocks;
++        this.snowGolemPlaceSnow = config.qolEntityBehaviorSnowGolemPlaceSnow;
++        this.foxTrustBreeding = config.qolEntityBehaviorFoxTrustBreeding;
++
++        // Spawning
++        this.ironGolemNaturalSpawn = config.qolEntityBehaviorIronGolemSpawn;
++        this.catNaturalSpawn = config.qolEntityBehaviorCatSpawn;
++        this.wanderingTraderSpawn = config.qolEntityBehaviorWanderingTraderSpawn;
++        this.wanderingTraderSpawnChance = config.qolEntityBehaviorWanderingTraderChance;
++        this.patrolSpawn = config.qolEntityBehaviorPatrolSpawn;
++        this.patrolSpawnChance = config.qolEntityBehaviorPatrolChance;
++
++        // AI behavior
++        this.skeletonAccuracyMultiplier = config.qolEntityBehaviorSkeletonAccuracy;
++        this.piglinAggroRange = config.qolEntityBehaviorPiglinAggroRange;
++        this.zombieVillagerConversion = config.qolEntityBehaviorZombieVillagerConversion;
++        this.zombieVillagerConversionChance = config.qolEntityBehaviorZombieVillagerConversionChance;
++        this.villagerRestocking = config.qolEntityBehaviorVillagerRestocking;
++        this.villagerRestockIntervalTicks = config.qolEntityBehaviorVillagerRestockInterval;
++        this.villagerLobotomizeNoJobSite = config.qolEntityBehaviorVillagerLobotomizeNoJob;
++
++        // Mob targeting
++        this.phantomTargetSleepers = config.qolEntityBehaviorPhantomTarget;
++        this.piglinBarterEnabled = config.qolEntityBehaviorPiglinBarter;
++        this.zombifiedPiglinNeutral = config.qolEntityBehaviorZombifiedPiglinNeutral;
++        this.witherSkullDamage = config.qolEntityBehaviorWitherSkullDamage;
++
++        // Misc
++        this.parrotImitation = config.qolEntityBehaviorParrotImitation;
++        this.beeAngry = config.qolEntityBehaviorBeeAngry;
++        this.dolphinTreasureRange = config.qolEntityBehaviorDolphinTreasureRange;
++
++        LOGGER.info("EntityBehaviorControl initialized");
++    }
++
++    /**
++     * Initialize the singleton instance.
++     */
++    public static void init(SurvivalCoreConfig config) {
++        if (instance != null) {
++            LOGGER.warning("EntityBehaviorControl already initialized");
++            return;
++        }
++        instance = new EntityBehaviorControl(config);
++    }
++
++    /**
++     * Get the singleton instance.
++     */
++    public static EntityBehaviorControl get() {
++        if (instance == null) {
++            throw new IllegalStateException("EntityBehaviorControl not initialized");
++        }
++        return instance;
++    }
++
++    // Helper methods for feature patches
++
++    public boolean shouldEndermanPickup() {
++        return endermanPickupBlocks;
++    }
++
++    public boolean shouldEndermanPlace() {
++        return endermanPlaceBlocks;
++    }
++
++    public boolean shouldZombieBreakDoor() {
++        return zombieDoorBreaking;
++    }
++
++    public boolean shouldSilverfishEnterBlocks() {
++        return silverfishEnterBlocks;
++    }
++
++    public double getSkeletonAccuracy() {
++        return skeletonAccuracyMultiplier;
++    }
++
++    public double getPiglinAggroRange() {
++        return piglinAggroRange;
++    }
++
++    public boolean shouldConvertZombieVillager() {
++        return zombieVillagerConversion;
++    }
++
++    public double getZombieVillagerConversionChance() {
++        return zombieVillagerConversionChance;
++    }
++
++    public boolean shouldVillagerRestock() {
++        return villagerRestocking;
++    }
++
++    public int getVillagerRestockInterval() {
++        return villagerRestockIntervalTicks;
++    }
++
++    public double getWitherSkullDamage() {
++        return witherSkullDamage;
++    }
++
++    public double getDolphinTreasureRange() {
++        return dolphinTreasureRange;
++    }
++}

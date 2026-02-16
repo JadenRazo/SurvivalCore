@@ -1,0 +1,198 @@
+package net.survivalcore.survival;
+
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
+import net.survivalcore.config.SurvivalCoreConfig;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.logging.Logger;
+
+/**
+ * Per-chunk entity density tracking with three throttling thresholds.
+ *
+ * Farms (high entity density areas) are throttled by increasing the tick
+ * divisor, causing entities to tick less frequently. This prevents large
+ * mob farms from monopolizing server performance.
+ *
+ * Three thresholds:
+ * - Soft: tick every other tick (divisor 2)
+ * - Hard: tick every 4th tick (divisor 4)
+ * - Critical: tick every 8th tick (divisor 8)
+ */
+public final class FarmDetector {
+
+    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
+    private static FarmDetector instance;
+
+    private final boolean enabled;
+    private final int softThreshold;
+    private final int hardThreshold;
+    private final int criticalThreshold;
+    private final boolean alertAdmins;
+
+    private final Long2IntOpenHashMap chunkEntityCounts = new Long2IntOpenHashMap();
+    private int hotspotCount = 0;
+    private long lastAlertTick = 0;
+
+    private FarmDetector(SurvivalCoreConfig config) {
+        this.enabled = config.farmDetectionEnabled;
+        this.softThreshold = config.farmSoftThreshold;
+        this.hardThreshold = config.farmHardThreshold;
+        this.criticalThreshold = config.farmCriticalThreshold;
+        this.alertAdmins = config.farmAlertAdmins;
+        this.chunkEntityCounts.defaultReturnValue(0);
+    }
+
+    public static void init() {
+        SurvivalCoreConfig config = SurvivalCoreConfig.get();
+        instance = new FarmDetector(config);
+
+        if (instance.enabled) {
+            LOGGER.info("Farm detection enabled: soft=" + config.farmSoftThreshold
+                + ", hard=" + config.farmHardThreshold
+                + ", critical=" + config.farmCriticalThreshold);
+        } else {
+            LOGGER.info("Farm detection disabled");
+        }
+    }
+
+    public static FarmDetector get() {
+        if (instance == null) {
+            throw new IllegalStateException("FarmDetector not initialized");
+        }
+        return instance;
+    }
+
+    public static boolean isEnabled() {
+        return instance != null && instance.enabled;
+    }
+
+    /**
+     * Reset chunk entity counts at the start of each tick.
+     */
+    public void resetCounts() {
+        if (enabled) {
+            chunkEntityCounts.clear();
+            hotspotCount = 0;
+        }
+    }
+
+    /**
+     * Track an entity in the given chunk.
+     *
+     * @param chunkKey chunk coordinate key (pack x/z into long)
+     */
+    public void trackEntity(long chunkKey) {
+        if (enabled) {
+            int count = chunkEntityCounts.get(chunkKey) + 1;
+            chunkEntityCounts.put(chunkKey, count);
+            if (count >= softThreshold) {
+                hotspotCount++;
+            }
+        }
+    }
+
+    /**
+     * Get the tick divisor for a chunk based on entity density.
+     *
+     * Returns 1 (every tick), 2 (every other), 4 (quarter), or 8 (eighth).
+     *
+     * @param chunkKey chunk coordinate key
+     * @return tick divisor
+     */
+    public int getTickDivisor(long chunkKey) {
+        if (!enabled) return 1;
+
+        int count = chunkEntityCounts.get(chunkKey);
+        if (count >= criticalThreshold) return 8;
+        if (count >= hardThreshold) return 4;
+        if (count >= softThreshold) return 2;
+        return 1;
+    }
+
+    /**
+     * Check if entity should tick based on chunk density and current tick.
+     *
+     * @param chunkKey    chunk coordinate key
+     * @param currentTick current server tick
+     * @param entityId    entity ID for staggering
+     * @return true if entity should tick
+     */
+    public boolean shouldTickEntity(long chunkKey, long currentTick, int entityId) {
+        if (!enabled) return true;
+        int divisor = getTickDivisor(chunkKey);
+        if (divisor == 1) return true;
+        return (currentTick + entityId) % divisor == 0;
+    }
+
+    /**
+     * Get a snapshot of chunks above the soft threshold.
+     *
+     * @return map of chunk key to entity count
+     */
+    public Map<Long, Integer> getHotspots() {
+        if (!enabled) return Map.of();
+
+        Map<Long, Integer> hotspots = new HashMap<>();
+        chunkEntityCounts.forEach((chunkKey, count) -> {
+            if (count >= softThreshold) {
+                hotspots.put(chunkKey, count);
+            }
+        });
+        return hotspots;
+    }
+
+    /**
+     * Get the number of hotspot chunks detected this tick.
+     */
+    public int getHotspotCount() {
+        return enabled ? hotspotCount : 0;
+    }
+
+    /**
+     * Check and log alerts for farm hotspots.
+     * Called periodically (e.g., every 1200 ticks / 1 minute).
+     *
+     * @param currentTick current server tick
+     */
+    public void checkAlerts(long currentTick) {
+        if (!enabled || !alertAdmins) return;
+
+        // Alert at most once per minute
+        if (currentTick - lastAlertTick < 1200) return;
+
+        Map<Long, Integer> hotspots = getHotspots();
+        if (hotspots.isEmpty()) return;
+
+        int criticalCount = 0;
+        int hardCount = 0;
+        int softCount = 0;
+
+        for (int count : hotspots.values()) {
+            if (count >= criticalThreshold) criticalCount++;
+            else if (count >= hardThreshold) hardCount++;
+            else softCount++;
+        }
+
+        if (criticalCount > 0 || hardCount > 0 || softCount > 5) {
+            LOGGER.warning(String.format(
+                "Farm hotspots detected: %d critical, %d hard, %d soft (total %d chunks)",
+                criticalCount, hardCount, softCount, hotspots.size()
+            ));
+            lastAlertTick = currentTick;
+        }
+    }
+
+    /**
+     * Get detailed stats for a specific chunk.
+     */
+    public ChunkStats getChunkStats(long chunkKey) {
+        if (!enabled) return ChunkStats.NONE;
+        int count = chunkEntityCounts.get(chunkKey);
+        int divisor = getTickDivisor(chunkKey);
+        return new ChunkStats(count, divisor);
+    }
+
+    public record ChunkStats(int entityCount, int tickDivisor) {
+        public static final ChunkStats NONE = new ChunkStats(0, 1);
+    }
+}

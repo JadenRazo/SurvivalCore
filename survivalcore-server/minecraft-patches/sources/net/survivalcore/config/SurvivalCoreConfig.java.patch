@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/config/SurvivalCoreConfig.java
-@@ -1,0 +_,636 @@
+@@ -1,0 +_,1065 @@
 +package net.survivalcore.config;
 +
 +import java.io.IOException;
@@ -24,6 +24,9 @@
 +    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
 +    private static SurvivalCoreConfig instance;
 +
++    // Package-private for WorldConfig access
++    CommentedConfigurationNode root;
++
 +    // ── Async: Entity Tracker ────────────────────────────
 +    public final boolean asyncEntityTrackerEnabled;
 +    public int asyncEntityTrackerMaxThreads;
@@ -40,11 +43,21 @@
 +    public final boolean asyncChunkPreloadingEnabled;
 +    public int asyncChunkPreloadingRadius;
 +
++    // ── Async: Chunk I/O ─────────────────────────────────
++    public final boolean asyncChunkIOEnabled;
++    public int asyncChunkIOThreads;
++    public int asyncChunkIOQueueSize;
++
 +    // ── Performance: SIMD ────────────────────────────────
 +    public final boolean simdEnabled;
 +
 +    // ── Performance: FastMath ─────────────────────────────
 +    public final boolean fastMathEnabled;
++
++    // ── Performance: Fast Lighting ────────────────────────
++    public final boolean fastLightingEnabled;
++    public int fastLightingBatchSize;
++    public double fastLightingTickBudgetMs;
 +
 +    // ── Performance: Hopper ──────────────────────────────
 +    public final boolean hopperOptimizedCaching;
@@ -107,7 +120,13 @@
 +    public final boolean fixChorusFruitWallPhase;
 +    public final boolean fixHeadlessPiston;
 +    public final boolean fixPortalTrapProtection;
++    public final boolean fixGravityBlockDuplication;
 +    public int fixTntDupeLimit;
++
++    // ── Fixes: Illegal Stacks ─────────────────────────────
++    public final boolean fixIllegalStacksEnabled;
++    public int fixIllegalStacksMaxNbtSize;
++    public final boolean fixIllegalStacksLogViolations;
 +
 +    // ── QoL: Phantoms ─────────────────────────────────────
 +    public final boolean qolPhantomsEnabled;
@@ -142,6 +161,95 @@
 +    // ── QoL: Bed Explosions ───────────────────────────────
 +    public final boolean qolBedExplosionsEnabled;
 +
++    // ── QoL: Rideable Mobs ────────────────────────────────
++    public final boolean qolRideableMobsEnabled;
++    public final boolean qolRideableMobsRequirePermission;
++    public double qolRideableMobsDefaultSpeedMultiplier;
++    public double qolRideableMobsDefaultJumpMultiplier;
++    public final boolean qolRideableMobsRequireSaddle;
++
++    // ── QoL: Entity Behavior Controls ────────────────────
++    // Block interaction
++    public final boolean qolEntityBehaviorEndermanPickup;
++    public final boolean qolEntityBehaviorEndermanPlace;
++    public final boolean qolEntityBehaviorZombieDoorBreak;
++    public final boolean qolEntityBehaviorSilverfishEnterBlocks;
++    public final boolean qolEntityBehaviorSnowGolemPlaceSnow;
++    public final boolean qolEntityBehaviorFoxTrustBreeding;
++    // Spawning
++    public final boolean qolEntityBehaviorIronGolemSpawn;
++    public final boolean qolEntityBehaviorCatSpawn;
++    public final boolean qolEntityBehaviorWanderingTraderSpawn;
++    public int qolEntityBehaviorWanderingTraderChance;
++    public final boolean qolEntityBehaviorPatrolSpawn;
++    public int qolEntityBehaviorPatrolChance;
++    // AI behavior
++    public double qolEntityBehaviorSkeletonAccuracy;
++    public double qolEntityBehaviorPiglinAggroRange;
++    public final boolean qolEntityBehaviorZombieVillagerConversion;
++    public double qolEntityBehaviorZombieVillagerConversionChance;
++    public final boolean qolEntityBehaviorVillagerRestocking;
++    public int qolEntityBehaviorVillagerRestockInterval;
++    public final boolean qolEntityBehaviorVillagerLobotomizeNoJob;
++    // Mob targeting
++    public final boolean qolEntityBehaviorPhantomTarget;
++    public final boolean qolEntityBehaviorPiglinBarter;
++    public final boolean qolEntityBehaviorZombifiedPiglinNeutral;
++    public double qolEntityBehaviorWitherSkullDamage;
++    // Misc
++    public final boolean qolEntityBehaviorParrotImitation;
++    public final boolean qolEntityBehaviorBeeAngry;
++    public double qolEntityBehaviorDolphinTreasureRange;
++
++    // ── QoL: Inventory Customization ─────────────────────
++    public int qolEnderChestRows;
++    public final boolean qolShulkerStackableWhenEmpty;
++    public int qolShulkerEmptyStackSize;
++    public final boolean qolShulkerOpenInInventory;
++    public int qolShulkerMaxNestDepth;
++
++    // ── QoL: Anvil & Enchantments ─────────────────────────
++    public final boolean qolAnvilRemoveTooExpensive;
++    public int qolAnvilMaxCost;
++    public double qolAnvilRepairCostMultiplier;
++    public final boolean qolAnvilColoredRenaming;
++    public final boolean qolEnchantmentsAllowUnsafe;
++
++    // ── QoL: Villager Trading ────────────────────────────
++    public double qolVillagersRestockTimingMultiplier;
++    public int qolVillagersMaxDiscountPercent;
++    public int qolVillagersMinimumTradePrice;
++    public final boolean qolVillagersZombieCureDiscount;
++    public double qolVillagersZombieCureDiscountMultiplier;
++    public final boolean qolVillagersPreventTradeLocking;
++
++    // ── QoL: Teleportation ────────────────────────────────
++    public int qolEnderPearlsCooldownTicks;
++    public final boolean qolEnderPearlsLandingDamage;
++    public double qolEnderPearlsDamageAmount;
++    public double qolChorusFruitRange;
++    public int qolChorusFruitCooldownTicks;
++    public int qolPortalsCooldownTicks;
++    public int qolPortalsSearchRadius;
++    public int qolPortalsCreateRadius;
++
++    // ── QoL: Combat ───────────────────────────────────────
++    public double qolCombatAttackSpeedMultiplier;
++    public double qolCombatCritDamageMultiplier;
++    public double qolCombatSweepDamageMultiplier;
++    public int qolCombatShieldCooldownTicks;
++    public final boolean qolCombatTotemFromInventory;
++    public double qolCombatProjectileDamageMultiplier;
++
++    // ── QoL: Block Behavior ───────────────────────────────
++    public final boolean qolBlocksConcreteSolidifiesInRain;
++    public final boolean qolBlocksSpongeAbsorbsLava;
++    public int qolBlocksBookPageLimit;
++    public int qolBlocksSignMaxLines;
++    public final boolean qolBlocksSignRightClickEdit;
++    public int qolBlocksNoteBlockRange;
++    public int qolBlocksFarmlandMoistureRange;
++
 +    // ── Admin ─────────────────────────────────────────────
 +    public int adminMobSpawningMaxPerChunk;
 +    public final boolean adminAutoCleanupEnabled;
@@ -156,11 +264,15 @@
 +    public final boolean monitoringEnabled;
 +    public int monitoringReportInterval;
 +
++    // ── Storage ──────────────────────────────────────────
++    public final String storageRegionFormat;
++
 +    // ── Compatibility ────────────────────────────────────
 +    public final boolean villagerLobotomizeEnabled;
 +    public int villagerLobotomizeCheckInterval;
 +
 +    private SurvivalCoreConfig(CommentedConfigurationNode root) {
++        this.root = root;
 +        CommentedConfigurationNode async = root.node("async");
 +        CommentedConfigurationNode tracker = async.node("entity-tracker");
 +        this.asyncEntityTrackerEnabled = tracker.node("enabled").getBoolean(true);
@@ -177,9 +289,19 @@
 +        this.asyncChunkPreloadingEnabled = preload.node("enabled").getBoolean(true);
 +        this.asyncChunkPreloadingRadius = preload.node("radius").getInt(2);
 +
++        CommentedConfigurationNode chunkIO = async.node("chunk-io");
++        this.asyncChunkIOEnabled = chunkIO.node("enabled").getBoolean(true);
++        this.asyncChunkIOThreads = chunkIO.node("threads").getInt(2);
++        this.asyncChunkIOQueueSize = chunkIO.node("queue-size").getInt(256);
++
 +        CommentedConfigurationNode perf = root.node("performance");
 +        this.simdEnabled = perf.node("simd", "enabled").getBoolean(true);
 +        this.fastMathEnabled = perf.node("fast-math", "enabled").getBoolean(true);
++
++        CommentedConfigurationNode lighting = perf.node("fast-lighting");
++        this.fastLightingEnabled = lighting.node("enabled").getBoolean(true);
++        this.fastLightingBatchSize = lighting.node("batch-size").getInt(1024);
++        this.fastLightingTickBudgetMs = lighting.node("tick-budget-ms").getDouble(1.0);
 +
 +        CommentedConfigurationNode hopper = perf.node("hopper");
 +        this.hopperOptimizedCaching = hopper.node("optimized-inventory-caching").getBoolean(true);
@@ -248,7 +370,14 @@
 +        this.fixChorusFruitWallPhase = fixes.node("chorus-fruit-wall-phase").getBoolean(true);
 +        this.fixHeadlessPiston = fixes.node("headless-piston").getBoolean(true);
 +        this.fixPortalTrapProtection = fixes.node("portal-trap-protection").getBoolean(true);
-+        this.fixTntDupeLimit = fixes.node("tnt-dupe-limit").getInt(10);
++        this.fixGravityBlockDuplication = fixes.node("gravity-block-duplication").getBoolean(true);
++        this.fixTntDupeLimit = fixes.node("tnt-dupe-limit").getInt(4);
++
++        // Illegal stacks
++        CommentedConfigurationNode illegalStacks = fixes.node("illegal-stacks");
++        this.fixIllegalStacksEnabled = illegalStacks.node("enabled").getBoolean(true);
++        this.fixIllegalStacksMaxNbtSize = illegalStacks.node("max-nbt-size").getInt(2097152);
++        this.fixIllegalStacksLogViolations = illegalStacks.node("log-violations").getBoolean(true);
 +
 +        // QoL: Phantoms
 +        CommentedConfigurationNode phantoms = root.node("qol", "phantoms");
@@ -288,6 +417,105 @@
 +        // QoL: Bed explosions
 +        this.qolBedExplosionsEnabled = root.node("qol", "bed-explosions-enabled").getBoolean(true);
 +
++        // QoL: Rideable Mobs
++        CommentedConfigurationNode rideable = root.node("qol", "rideable-mobs");
++        this.qolRideableMobsEnabled = rideable.node("enabled").getBoolean(false);
++        this.qolRideableMobsRequirePermission = rideable.node("require-permission").getBoolean(true);
++        this.qolRideableMobsDefaultSpeedMultiplier = rideable.node("default-speed-multiplier").getDouble(1.0);
++        this.qolRideableMobsDefaultJumpMultiplier = rideable.node("default-jump-multiplier").getDouble(1.0);
++        this.qolRideableMobsRequireSaddle = rideable.node("require-saddle").getBoolean(false);
++
++        // QoL: Entity Behavior Controls
++        CommentedConfigurationNode entityBehavior = root.node("qol", "entity-behavior");
++        // Block interaction
++        this.qolEntityBehaviorEndermanPickup = entityBehavior.node("enderman-pickup-blocks").getBoolean(true);
++        this.qolEntityBehaviorEndermanPlace = entityBehavior.node("enderman-place-blocks").getBoolean(true);
++        this.qolEntityBehaviorZombieDoorBreak = entityBehavior.node("zombie-door-breaking").getBoolean(true);
++        this.qolEntityBehaviorSilverfishEnterBlocks = entityBehavior.node("silverfish-enter-blocks").getBoolean(true);
++        this.qolEntityBehaviorSnowGolemPlaceSnow = entityBehavior.node("snow-golem-place-snow").getBoolean(true);
++        this.qolEntityBehaviorFoxTrustBreeding = entityBehavior.node("fox-trust-breeding").getBoolean(true);
++        // Spawning
++        this.qolEntityBehaviorIronGolemSpawn = entityBehavior.node("iron-golem-natural-spawn").getBoolean(true);
++        this.qolEntityBehaviorCatSpawn = entityBehavior.node("cat-natural-spawn").getBoolean(true);
++        this.qolEntityBehaviorWanderingTraderSpawn = entityBehavior.node("wandering-trader-spawn").getBoolean(true);
++        this.qolEntityBehaviorWanderingTraderChance = entityBehavior.node("wandering-trader-spawn-chance").getInt(25);
++        this.qolEntityBehaviorPatrolSpawn = entityBehavior.node("patrol-spawn").getBoolean(true);
++        this.qolEntityBehaviorPatrolChance = entityBehavior.node("patrol-spawn-chance").getInt(20);
++        // AI behavior
++        this.qolEntityBehaviorSkeletonAccuracy = entityBehavior.node("skeleton-accuracy-multiplier").getDouble(1.0);
++        this.qolEntityBehaviorPiglinAggroRange = entityBehavior.node("piglin-aggro-range").getDouble(16.0);
++        this.qolEntityBehaviorZombieVillagerConversion = entityBehavior.node("zombie-villager-conversion").getBoolean(true);
++        this.qolEntityBehaviorZombieVillagerConversionChance = entityBehavior.node("zombie-villager-conversion-chance").getDouble(0.05);
++        this.qolEntityBehaviorVillagerRestocking = entityBehavior.node("villager-restocking").getBoolean(true);
++        this.qolEntityBehaviorVillagerRestockInterval = entityBehavior.node("villager-restock-interval-ticks").getInt(2400);
++        this.qolEntityBehaviorVillagerLobotomizeNoJob = entityBehavior.node("villager-lobotomize-no-job-site").getBoolean(false);
++        // Mob targeting
++        this.qolEntityBehaviorPhantomTarget = entityBehavior.node("phantom-target-sleepers").getBoolean(true);
++        this.qolEntityBehaviorPiglinBarter = entityBehavior.node("piglin-barter-enabled").getBoolean(true);
++        this.qolEntityBehaviorZombifiedPiglinNeutral = entityBehavior.node("zombified-piglin-neutral").getBoolean(true);
++        this.qolEntityBehaviorWitherSkullDamage = entityBehavior.node("wither-skull-damage").getDouble(8.0);
++        // Misc
++        this.qolEntityBehaviorParrotImitation = entityBehavior.node("parrot-imitation").getBoolean(true);
++        this.qolEntityBehaviorBeeAngry = entityBehavior.node("bee-angry").getBoolean(true);
++        this.qolEntityBehaviorDolphinTreasureRange = entityBehavior.node("dolphin-treasure-range").getDouble(32.0);
++
++        // QoL: Inventory Customization
++        this.qolEnderChestRows = root.node("qol", "ender-chest-rows").getInt(3);
++        CommentedConfigurationNode shulker = root.node("qol", "shulker-boxes");
++        this.qolShulkerStackableWhenEmpty = shulker.node("stackable-when-empty").getBoolean(false);
++        this.qolShulkerEmptyStackSize = shulker.node("empty-stack-size").getInt(16);
++        this.qolShulkerOpenInInventory = shulker.node("open-in-inventory").getBoolean(false);
++        this.qolShulkerMaxNestDepth = shulker.node("max-nest-depth").getInt(0);
++
++        // QoL: Anvil & Enchantments
++        CommentedConfigurationNode anvil = root.node("qol", "anvil");
++        this.qolAnvilRemoveTooExpensive = anvil.node("remove-too-expensive").getBoolean(false);
++        this.qolAnvilMaxCost = anvil.node("max-cost").getInt(0);
++        this.qolAnvilRepairCostMultiplier = anvil.node("repair-cost-multiplier").getDouble(1.0);
++        this.qolAnvilColoredRenaming = anvil.node("colored-renaming").getBoolean(false);
++        this.qolEnchantmentsAllowUnsafe = root.node("qol", "enchantments", "allow-unsafe").getBoolean(false);
++
++        // QoL: Villager Trading
++        CommentedConfigurationNode villagers = root.node("qol", "villagers");
++        this.qolVillagersRestockTimingMultiplier = villagers.node("restock-timing-multiplier").getDouble(1.0);
++        this.qolVillagersMaxDiscountPercent = villagers.node("max-discount-percent").getInt(100);
++        this.qolVillagersMinimumTradePrice = villagers.node("minimum-trade-price").getInt(1);
++        this.qolVillagersZombieCureDiscount = villagers.node("zombie-cure-discount").getBoolean(true);
++        this.qolVillagersZombieCureDiscountMultiplier = villagers.node("zombie-cure-discount-multiplier").getDouble(1.0);
++        this.qolVillagersPreventTradeLocking = villagers.node("prevent-trade-locking").getBoolean(false);
++
++        // QoL: Teleportation
++        CommentedConfigurationNode enderPearls = root.node("qol", "ender-pearls");
++        this.qolEnderPearlsCooldownTicks = enderPearls.node("cooldown-ticks").getInt(20);
++        this.qolEnderPearlsLandingDamage = enderPearls.node("landing-damage").getBoolean(true);
++        this.qolEnderPearlsDamageAmount = enderPearls.node("damage-amount").getDouble(5.0);
++        CommentedConfigurationNode chorusFruit = root.node("qol", "chorus-fruit");
++        this.qolChorusFruitRange = chorusFruit.node("range").getDouble(8.0);
++        this.qolChorusFruitCooldownTicks = chorusFruit.node("cooldown-ticks").getInt(20);
++        CommentedConfigurationNode portals = root.node("qol", "portals");
++        this.qolPortalsCooldownTicks = portals.node("cooldown-ticks").getInt(80);
++        this.qolPortalsSearchRadius = portals.node("search-radius").getInt(128);
++        this.qolPortalsCreateRadius = portals.node("create-radius").getInt(16);
++
++        // QoL: Combat
++        CommentedConfigurationNode combat = root.node("qol", "combat");
++        this.qolCombatAttackSpeedMultiplier = combat.node("attack-speed-multiplier").getDouble(1.0);
++        this.qolCombatCritDamageMultiplier = combat.node("crit-damage-multiplier").getDouble(1.5);
++        this.qolCombatSweepDamageMultiplier = combat.node("sweep-damage-multiplier").getDouble(1.0);
++        this.qolCombatShieldCooldownTicks = combat.node("shield-cooldown-ticks").getInt(100);
++        this.qolCombatTotemFromInventory = combat.node("totem-from-inventory").getBoolean(false);
++        this.qolCombatProjectileDamageMultiplier = combat.node("projectile-damage-multiplier").getDouble(1.0);
++
++        // QoL: Block Behavior
++        CommentedConfigurationNode blocks = root.node("qol", "blocks");
++        this.qolBlocksConcreteSolidifiesInRain = blocks.node("concrete-solidifies-in-rain").getBoolean(false);
++        this.qolBlocksSpongeAbsorbsLava = blocks.node("sponge-absorbs-lava").getBoolean(false);
++        this.qolBlocksBookPageLimit = blocks.node("book-page-limit").getInt(100);
++        this.qolBlocksSignMaxLines = blocks.node("sign-max-lines").getInt(4);
++        this.qolBlocksSignRightClickEdit = blocks.node("sign-right-click-edit").getBoolean(false);
++        this.qolBlocksNoteBlockRange = blocks.node("note-block-range").getInt(48);
++        this.qolBlocksFarmlandMoistureRange = blocks.node("farmland-moisture-range").getInt(4);
++
 +        // Admin
 +        CommentedConfigurationNode admin = root.node("admin");
 +        this.adminMobSpawningMaxPerChunk = admin.node("mob-spawning", "max-per-chunk").getInt(50);
@@ -305,6 +533,9 @@
 +        CommentedConfigurationNode monitoring = root.node("monitoring");
 +        this.monitoringEnabled = monitoring.node("enabled").getBoolean(true);
 +        this.monitoringReportInterval = monitoring.node("report-interval").getInt(6000);
++
++        CommentedConfigurationNode storage = root.node("storage");
++        this.storageRegionFormat = storage.node("region-format").getString("anvil");
 +
 +        CommentedConfigurationNode compat = root.node("compatibility");
 +        CommentedConfigurationNode lobotomize = compat.node("villager-lobotomize");
@@ -324,6 +555,12 @@
 +        this.asyncEntityTrackerMaxThreads = ConfigValidator.ensureNonNegative("async.entity-tracker.max-threads", this.asyncEntityTrackerMaxThreads);
 +        this.asyncPathfindingMaxThreads = ConfigValidator.ensureNonNegative("async.pathfinding.max-threads", this.asyncPathfindingMaxThreads);
 +        this.asyncChunkPreloadingRadius = ConfigValidator.clampInt("async.chunk-preloading.radius", this.asyncChunkPreloadingRadius, 0, 16);
++        this.asyncChunkIOThreads = ConfigValidator.ensureNonNegative("async.chunk-io.threads", this.asyncChunkIOThreads);
++        this.asyncChunkIOQueueSize = ConfigValidator.ensurePositive("async.chunk-io.queue-size", this.asyncChunkIOQueueSize);
++
++        // Fast lighting (must be positive)
++        this.fastLightingBatchSize = ConfigValidator.ensurePositive("performance.fast-lighting.batch-size", this.fastLightingBatchSize);
++        this.fastLightingTickBudgetMs = ConfigValidator.ensurePositive("performance.fast-lighting.tick-budget-ms", this.fastLightingTickBudgetMs);
 +
 +        // DAB values (must be positive)
 +        this.dabStartDistance = ConfigValidator.ensurePositive("performance.entity-ai.dab.start-distance", this.dabStartDistance);
@@ -366,6 +603,9 @@
 +        // TNT dupe limit (must be >= 0, 0 = unlimited)
 +        this.fixTntDupeLimit = ConfigValidator.ensureNonNegative("fixes.tnt-dupe-limit", this.fixTntDupeLimit);
 +
++        // Illegal stacks max NBT size (must be positive)
++        this.fixIllegalStacksMaxNbtSize = ConfigValidator.ensurePositive("fixes.illegal-stacks.max-nbt-size", this.fixIllegalStacksMaxNbtSize);
++
 +        // Phantom insomnia ticks (must be positive)
 +        this.qolPhantomsMinInsomniaTicks = ConfigValidator.ensurePositive("qol.phantoms.min-insomnia-ticks", this.qolPhantomsMinInsomniaTicks);
 +
@@ -390,6 +630,59 @@
 +
 +        // Monitoring report interval (must be >= 0, 0 = disabled)
 +        this.monitoringReportInterval = ConfigValidator.ensureNonNegative("monitoring.report-interval", this.monitoringReportInterval);
++
++        // Rideable mobs multipliers (must be > 0.0)
++        this.qolRideableMobsDefaultSpeedMultiplier = ConfigValidator.ensurePositive("qol.rideable-mobs.default-speed-multiplier", this.qolRideableMobsDefaultSpeedMultiplier);
++        this.qolRideableMobsDefaultJumpMultiplier = ConfigValidator.ensurePositive("qol.rideable-mobs.default-jump-multiplier", this.qolRideableMobsDefaultJumpMultiplier);
++
++        // Entity behavior spawn chances (must be 0-100)
++        this.qolEntityBehaviorWanderingTraderChance = ConfigValidator.clampInt("qol.entity-behavior.wandering-trader-spawn-chance", this.qolEntityBehaviorWanderingTraderChance, 0, 100);
++        this.qolEntityBehaviorPatrolChance = ConfigValidator.clampInt("qol.entity-behavior.patrol-spawn-chance", this.qolEntityBehaviorPatrolChance, 0, 100);
++
++        // Entity behavior multipliers (must be > 0.0)
++        this.qolEntityBehaviorSkeletonAccuracy = ConfigValidator.ensurePositive("qol.entity-behavior.skeleton-accuracy-multiplier", this.qolEntityBehaviorSkeletonAccuracy);
++        this.qolEntityBehaviorPiglinAggroRange = ConfigValidator.ensurePositive("qol.entity-behavior.piglin-aggro-range", this.qolEntityBehaviorPiglinAggroRange);
++        this.qolEntityBehaviorZombieVillagerConversionChance = ConfigValidator.clampDouble("qol.entity-behavior.zombie-villager-conversion-chance", this.qolEntityBehaviorZombieVillagerConversionChance, 0.0, 1.0);
++        this.qolEntityBehaviorVillagerRestockInterval = ConfigValidator.ensurePositive("qol.entity-behavior.villager-restock-interval-ticks", this.qolEntityBehaviorVillagerRestockInterval);
++        this.qolEntityBehaviorWitherSkullDamage = ConfigValidator.ensurePositive("qol.entity-behavior.wither-skull-damage", this.qolEntityBehaviorWitherSkullDamage);
++        this.qolEntityBehaviorDolphinTreasureRange = ConfigValidator.ensurePositive("qol.entity-behavior.dolphin-treasure-range", this.qolEntityBehaviorDolphinTreasureRange);
++
++        // Inventory customization (ender chest rows must be 1-6)
++        this.qolEnderChestRows = ConfigValidator.clampInt("qol.ender-chest-rows", this.qolEnderChestRows, 1, 6);
++        this.qolShulkerEmptyStackSize = ConfigValidator.clampInt("qol.shulker-boxes.empty-stack-size", this.qolShulkerEmptyStackSize, 1, 64);
++        this.qolShulkerMaxNestDepth = ConfigValidator.ensureNonNegative("qol.shulker-boxes.max-nest-depth", this.qolShulkerMaxNestDepth);
++
++        // Anvil & Enchantments (max cost must be >= 0, repair cost multiplier must be positive)
++        this.qolAnvilMaxCost = ConfigValidator.ensureNonNegative("qol.anvil.max-cost", this.qolAnvilMaxCost);
++        this.qolAnvilRepairCostMultiplier = ConfigValidator.ensurePositive("qol.anvil.repair-cost-multiplier", this.qolAnvilRepairCostMultiplier);
++
++        // Villager Trading (multipliers must be positive, discount percent 0-100, min price >= 1)
++        this.qolVillagersRestockTimingMultiplier = ConfigValidator.ensurePositive("qol.villagers.restock-timing-multiplier", this.qolVillagersRestockTimingMultiplier);
++        this.qolVillagersMaxDiscountPercent = ConfigValidator.clampInt("qol.villagers.max-discount-percent", this.qolVillagersMaxDiscountPercent, 0, 100);
++        this.qolVillagersMinimumTradePrice = ConfigValidator.ensurePositive("qol.villagers.minimum-trade-price", this.qolVillagersMinimumTradePrice);
++        this.qolVillagersZombieCureDiscountMultiplier = ConfigValidator.ensurePositive("qol.villagers.zombie-cure-discount-multiplier", this.qolVillagersZombieCureDiscountMultiplier);
++
++        // Teleportation (cooldowns must be >= 0, ranges must be positive)
++        this.qolEnderPearlsCooldownTicks = ConfigValidator.ensureNonNegative("qol.ender-pearls.cooldown-ticks", this.qolEnderPearlsCooldownTicks);
++        this.qolEnderPearlsDamageAmount = ConfigValidator.ensurePositive("qol.ender-pearls.damage-amount", this.qolEnderPearlsDamageAmount);
++        this.qolChorusFruitRange = ConfigValidator.ensurePositive("qol.chorus-fruit.range", this.qolChorusFruitRange);
++        this.qolChorusFruitCooldownTicks = ConfigValidator.ensureNonNegative("qol.chorus-fruit.cooldown-ticks", this.qolChorusFruitCooldownTicks);
++        this.qolPortalsCooldownTicks = ConfigValidator.ensureNonNegative("qol.portals.cooldown-ticks", this.qolPortalsCooldownTicks);
++        this.qolPortalsSearchRadius = ConfigValidator.ensurePositive("qol.portals.search-radius", this.qolPortalsSearchRadius);
++        this.qolPortalsCreateRadius = ConfigValidator.ensurePositive("qol.portals.create-radius", this.qolPortalsCreateRadius);
++
++        // Combat (multipliers must be positive, shield cooldown >= 0)
++        this.qolCombatAttackSpeedMultiplier = ConfigValidator.ensurePositive("qol.combat.attack-speed-multiplier", this.qolCombatAttackSpeedMultiplier);
++        this.qolCombatCritDamageMultiplier = ConfigValidator.ensurePositive("qol.combat.crit-damage-multiplier", this.qolCombatCritDamageMultiplier);
++        this.qolCombatSweepDamageMultiplier = ConfigValidator.ensurePositive("qol.combat.sweep-damage-multiplier", this.qolCombatSweepDamageMultiplier);
++        this.qolCombatShieldCooldownTicks = ConfigValidator.ensureNonNegative("qol.combat.shield-cooldown-ticks", this.qolCombatShieldCooldownTicks);
++        this.qolCombatProjectileDamageMultiplier = ConfigValidator.ensurePositive("qol.combat.projectile-damage-multiplier", this.qolCombatProjectileDamageMultiplier);
++
++        // Block Behavior (page limit, sign lines, ranges must be positive)
++        this.qolBlocksBookPageLimit = ConfigValidator.ensurePositive("qol.blocks.book-page-limit", this.qolBlocksBookPageLimit);
++        this.qolBlocksSignMaxLines = ConfigValidator.clampInt("qol.blocks.sign-max-lines", this.qolBlocksSignMaxLines, 1, 10);
++        this.qolBlocksNoteBlockRange = ConfigValidator.ensurePositive("qol.blocks.note-block-range", this.qolBlocksNoteBlockRange);
++        this.qolBlocksFarmlandMoistureRange = ConfigValidator.ensurePositive("qol.blocks.farmland-moisture-range", this.qolBlocksFarmlandMoistureRange);
 +
 +        // Villager lobotomize check interval (must be positive)
 +        this.villagerLobotomizeCheckInterval = ConfigValidator.ensurePositive("compatibility.villager-lobotomize.check-interval", this.villagerLobotomizeCheckInterval);
@@ -458,12 +751,24 @@
 +
 +        setDefault(async.node("mob-spawning", "enabled"), true, "Calculate spawn positions async; entity creation stays on main thread.");
 +
++        CommentedConfigurationNode chunkIO = async.node("chunk-io");
++        chunkIO.comment("Async chunk I/O for faster world loading.");
++        setDefault(chunkIO.node("enabled"), true, "Offload chunk deserialization to worker threads");
++        setDefault(chunkIO.node("threads"), 2, "Thread pool size (0 = auto, cores/4)");
++        setDefault(chunkIO.node("queue-size"), 256, "Max pending chunk reads");
++
 +        // Performance section
 +        CommentedConfigurationNode perf = root.node("performance");
 +        perf.comment("Computation and memory optimizations.");
 +
 +        setDefault(perf.node("simd", "enabled"), true, "Use Java Vector API (SIMD) for data-parallel operations.\nRequires JVM flag: --add-modules=jdk.incubator.vector");
 +        setDefault(perf.node("fast-math", "enabled"), true, "Trig lookup tables, bit-manipulation floor/ceil, fast inverse sqrt.");
++
++        CommentedConfigurationNode lighting = perf.node("fast-lighting");
++        lighting.comment("Batched light recalculation engine.");
++        setDefault(lighting.node("enabled"), true, "Queue and batch light updates to reduce lag spikes");
++        setDefault(lighting.node("batch-size"), 1024, "Max light updates per batch");
++        setDefault(lighting.node("tick-budget-ms"), 1.0, "Max milliseconds per tick for light processing");
 +
 +        CommentedConfigurationNode hopper = perf.node("hopper");
 +        hopper.comment("Lithium-style hopper optimizations.");
@@ -545,7 +850,14 @@
 +        setDefault(fixes.node("chorus-fruit-wall-phase"), true, "Prevent chorus fruit from phasing through walls");
 +        setDefault(fixes.node("headless-piston"), true, "Fix headless piston duplication");
 +        setDefault(fixes.node("portal-trap-protection"), true, "Prevent portal trapping exploits");
-+        setDefault(fixes.node("tnt-dupe-limit"), 10, "Max TNT duplication per tick (0 = disable duping entirely)");
++        setDefault(fixes.node("gravity-block-duplication"), true, "Prevent gravity block (sand/gravel/concrete powder) duplication via portals");
++        setDefault(fixes.node("tnt-dupe-limit"), 4, "Max TNT entities per chunk per tick (0 = block all duplication)");
++
++        CommentedConfigurationNode illegalStacks = fixes.node("illegal-stacks");
++        illegalStacks.comment("Detect and prevent illegal item modifications.");
++        setDefault(illegalStacks.node("enabled"), true, "Validate item stacks for illegal modifications");
++        setDefault(illegalStacks.node("max-nbt-size"), 2097152, "Max NBT data size in bytes (default: 2MB)");
++        setDefault(illegalStacks.node("log-violations"), true, "Log illegal stack violations to console");
 +
 +        // QoL: Phantoms
 +        CommentedConfigurationNode qol = root.node("qol");
@@ -592,6 +904,117 @@
 +        // QoL: Bed explosions
 +        setDefault(qol.node("bed-explosions-enabled"), true, "Allow bed explosions in the Nether and End (vanilla default: true)");
 +
++        // QoL: Rideable Mobs
++        CommentedConfigurationNode rideable = qol.node("rideable-mobs");
++        rideable.comment("Universal mob riding system with WASD controls.");
++        setDefault(rideable.node("enabled"), false, "Master toggle for rideable mobs");
++        setDefault(rideable.node("require-permission"), true, "Require survivalcore.ride permission");
++        setDefault(rideable.node("default-speed-multiplier"), 1.0, "Base speed multiplier for all rideable mobs");
++        setDefault(rideable.node("default-jump-multiplier"), 1.0, "Base jump height multiplier for all rideable mobs");
++        setDefault(rideable.node("require-saddle"), false, "Require saddle item to ride mobs");
++
++        // QoL: Entity Behavior Controls
++        CommentedConfigurationNode entityBehavior = qol.node("entity-behavior");
++        entityBehavior.comment("Fine-grained mob behavior controls (expands on mob-griefing).");
++        // Block interaction
++        setDefault(entityBehavior.node("enderman-pickup-blocks"), true, "Endermen can pick up blocks");
++        setDefault(entityBehavior.node("enderman-place-blocks"), true, "Endermen can place blocks");
++        setDefault(entityBehavior.node("zombie-door-breaking"), true, "Zombies can break doors (hard difficulty)");
++        setDefault(entityBehavior.node("silverfish-enter-blocks"), true, "Silverfish can enter and hide in stone blocks");
++        setDefault(entityBehavior.node("snow-golem-place-snow"), true, "Snow golems leave snow trail");
++        setDefault(entityBehavior.node("fox-trust-breeding"), true, "Foxes can breed when trusting players");
++        // Spawning
++        setDefault(entityBehavior.node("iron-golem-natural-spawn"), true, "Iron golems spawn naturally in villages");
++        setDefault(entityBehavior.node("cat-natural-spawn"), true, "Cats spawn naturally in villages");
++        setDefault(entityBehavior.node("wandering-trader-spawn"), true, "Wandering traders spawn");
++        setDefault(entityBehavior.node("wandering-trader-spawn-chance"), 25, "Wandering trader spawn chance (0-100, vanilla ~2.5%)");
++        setDefault(entityBehavior.node("patrol-spawn"), true, "Pillager patrols spawn");
++        setDefault(entityBehavior.node("patrol-spawn-chance"), 20, "Patrol spawn chance (0-100, vanilla ~20%)");
++        // AI behavior
++        setDefault(entityBehavior.node("skeleton-accuracy-multiplier"), 1.0, "Skeleton arrow accuracy (1.0 = vanilla, higher = more accurate)");
++        setDefault(entityBehavior.node("piglin-aggro-range"), 16.0, "Piglin aggro detection range in blocks");
++        setDefault(entityBehavior.node("zombie-villager-conversion"), true, "Zombie villagers can be cured");
++        setDefault(entityBehavior.node("zombie-villager-conversion-chance"), 0.05, "Zombie conversion chance (0.0-1.0, vanilla 5%)");
++        setDefault(entityBehavior.node("villager-restocking"), true, "Villagers restock trades");
++        setDefault(entityBehavior.node("villager-restock-interval-ticks"), 2400, "Ticks between villager restocks (2400 = 2 minutes)");
++        setDefault(entityBehavior.node("villager-lobotomize-no-job-site"), false, "Disable AI for villagers without job sites");
++        // Mob targeting
++        setDefault(entityBehavior.node("phantom-target-sleepers"), true, "Phantoms target players who haven't slept");
++        setDefault(entityBehavior.node("piglin-barter-enabled"), true, "Piglins accept gold for bartering");
++        setDefault(entityBehavior.node("zombified-piglin-neutral"), true, "Zombified piglins are neutral until provoked");
++        setDefault(entityBehavior.node("wither-skull-damage"), 8.0, "Wither skull damage (vanilla: 8.0)");
++        // Misc
++        setDefault(entityBehavior.node("parrot-imitation"), true, "Parrots imitate nearby mobs");
++        setDefault(entityBehavior.node("bee-angry"), true, "Bees become angry when attacked");
++        setDefault(entityBehavior.node("dolphin-treasure-range"), 32.0, "Dolphin treasure search range in blocks");
++
++        // QoL: Inventory Customization
++        setDefault(qol.node("ender-chest-rows"), 3, "Ender chest inventory rows (1-6, vanilla: 3)");
++        CommentedConfigurationNode shulker = qol.node("shulker-boxes");
++        shulker.comment("Shulker box behavior tweaks.");
++        setDefault(shulker.node("stackable-when-empty"), false, "Empty shulker boxes can stack");
++        setDefault(shulker.node("empty-stack-size"), 16, "Stack size for empty shulker boxes (1-64)");
++        setDefault(shulker.node("open-in-inventory"), false, "Shift+right-click to open shulker from inventory");
++        setDefault(shulker.node("max-nest-depth"), 0, "Max shulker nesting depth (0 = no nesting, 1 = one level)");
++
++        // QoL: Anvil & Enchantments
++        CommentedConfigurationNode anvil = qol.node("anvil");
++        anvil.comment("Anvil and enchantment customization.");
++        setDefault(anvil.node("remove-too-expensive"), false, "Remove 'Too Expensive!' cap (vanilla: 40 levels)");
++        setDefault(anvil.node("max-cost"), 0, "Max anvil cost (0 = no limit when remove-too-expensive is true)");
++        setDefault(anvil.node("repair-cost-multiplier"), 1.0, "Repair cost multiplier (1.0 = vanilla)");
++        setDefault(anvil.node("colored-renaming"), false, "Allow colored item names using MiniMessage format");
++        CommentedConfigurationNode enchantments = qol.node("enchantments");
++        enchantments.comment("Enchantment modifications.");
++        setDefault(enchantments.node("allow-unsafe"), false, "Allow enchantments above vanilla max via commands");
++
++        // QoL: Villager Trading
++        CommentedConfigurationNode villagers = qol.node("villagers");
++        villagers.comment("Villager trade customization.");
++        setDefault(villagers.node("restock-timing-multiplier"), 1.0, "Restock timing multiplier (0.5 = twice as fast, 2.0 = twice as slow)");
++        setDefault(villagers.node("max-discount-percent"), 100, "Max discount percentage (0-100, prevents infinite discounts)");
++        setDefault(villagers.node("minimum-trade-price"), 1, "Floor price in emeralds (items never go below this)");
++        setDefault(villagers.node("zombie-cure-discount"), true, "Enable zombie cure discounts");
++        setDefault(villagers.node("zombie-cure-discount-multiplier"), 1.0, "Zombie cure discount multiplier (1.0 = vanilla)");
++        setDefault(villagers.node("prevent-trade-locking"), false, "Prevent trades from locking permanently");
++
++        // QoL: Teleportation
++        CommentedConfigurationNode enderPearls = qol.node("ender-pearls");
++        enderPearls.comment("Ender pearl customization.");
++        setDefault(enderPearls.node("cooldown-ticks"), 20, "Cooldown in ticks (vanilla: 20 = 1 second)");
++        setDefault(enderPearls.node("landing-damage"), true, "Deal fall damage on landing");
++        setDefault(enderPearls.node("damage-amount"), 5.0, "Landing damage amount (vanilla: 5.0 = 2.5 hearts)");
++        CommentedConfigurationNode chorusFruit = qol.node("chorus-fruit");
++        chorusFruit.comment("Chorus fruit teleportation.");
++        setDefault(chorusFruit.node("range"), 8.0, "Teleport range in blocks (vanilla: 8.0)");
++        setDefault(chorusFruit.node("cooldown-ticks"), 20, "Cooldown in ticks (vanilla: 20 = 1 second)");
++        CommentedConfigurationNode portals = qol.node("portals");
++        portals.comment("Nether portal configuration.");
++        setDefault(portals.node("cooldown-ticks"), 80, "Portal cooldown in ticks (vanilla: 80 = 4 seconds)");
++        setDefault(portals.node("search-radius"), 128, "Portal search radius in blocks (vanilla: 128)");
++        setDefault(portals.node("create-radius"), 16, "Portal creation radius in blocks (vanilla: 16)");
++
++        // QoL: Combat
++        CommentedConfigurationNode combat = qol.node("combat");
++        combat.comment("Combat mechanics customization.");
++        setDefault(combat.node("attack-speed-multiplier"), 1.0, "Attack speed multiplier (1.0 = vanilla 1.9+ combat)");
++        setDefault(combat.node("crit-damage-multiplier"), 1.5, "Critical hit damage multiplier (1.5 = vanilla 150%)");
++        setDefault(combat.node("sweep-damage-multiplier"), 1.0, "Sweeping edge damage multiplier (1.0 = vanilla)");
++        setDefault(combat.node("shield-cooldown-ticks"), 100, "Shield cooldown after axe hit (vanilla: 100 = 5 seconds)");
++        setDefault(combat.node("totem-from-inventory"), false, "Totem of Undying works from any inventory slot");
++        setDefault(combat.node("projectile-damage-multiplier"), 1.0, "Projectile damage multiplier (1.0 = vanilla)");
++
++        // QoL: Block Behavior
++        CommentedConfigurationNode blocks = qol.node("blocks");
++        blocks.comment("Block behavior customization.");
++        setDefault(blocks.node("concrete-solidifies-in-rain"), false, "Concrete powder solidifies in rain");
++        setDefault(blocks.node("sponge-absorbs-lava"), false, "Sponges can absorb lava");
++        setDefault(blocks.node("book-page-limit"), 100, "Writable book page limit (vanilla: 100)");
++        setDefault(blocks.node("sign-max-lines"), 4, "Sign max line count (vanilla: 4)");
++        setDefault(blocks.node("sign-right-click-edit"), false, "Right-click to edit signs");
++        setDefault(blocks.node("note-block-range"), 48, "Note block audible range in blocks (vanilla: 48)");
++        setDefault(blocks.node("farmland-moisture-range"), 4, "Farmland moisture range in blocks (vanilla: 4)");
++
 +        // Admin
 +        CommentedConfigurationNode admin = root.node("admin");
 +        admin.comment("Administrative tools and limits.");
@@ -615,6 +1038,11 @@
 +        monitoring.comment("Performance monitoring and reporting.");
 +        setDefault(monitoring.node("enabled"), true, null);
 +        setDefault(monitoring.node("report-interval"), 6000, "Ticks between performance reports (0 = disabled). Default 6000 = 5 minutes.");
++
++        // Storage
++        CommentedConfigurationNode storage = root.node("storage");
++        storage.comment("Chunk storage format options.");
++        setDefault(storage.node("region-format"), "anvil", "Region file format: 'anvil' (vanilla) or 'linear' (~40% smaller)");
 +
 +        // Compatibility
 +        CommentedConfigurationNode compat = root.node("compatibility");

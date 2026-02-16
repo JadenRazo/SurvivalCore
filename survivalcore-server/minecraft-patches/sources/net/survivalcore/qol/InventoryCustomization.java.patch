@@ -1,0 +1,108 @@
+--- /dev/null
++++ b/net/survivalcore/qol/InventoryCustomization.java
+@@ -1,0 +_,105 @@
++package net.survivalcore.qol;
++
++import java.util.logging.Logger;
++import net.survivalcore.config.SurvivalCoreConfig;
++
++/**
++ * Inventory customization — ender chest rows and shulker box tweaks.
++ *
++ * Ender Chest:
++ * - Configurable 1-6 rows (default 3 = vanilla)
++ * - Larger sizes persist across sessions
++ *
++ * Shulker Boxes:
++ * - Stackable when empty (configurable stack size)
++ * - Open-in-inventory without placing (shift+right click)
++ * - Configurable nested shulker support with max depth
++ */
++public final class InventoryCustomization {
++
++    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
++    private static InventoryCustomization instance;
++
++    public final int enderChestRows;
++    public final boolean shulkerStackable;
++    public final int shulkerStackSize;
++    public final boolean shulkerOpenInInventory;
++    public final int shulkerMaxNestDepth;
++
++    private InventoryCustomization(SurvivalCoreConfig config) {
++        this.enderChestRows = config.qolEnderChestRows;
++        this.shulkerStackable = config.qolShulkerStackableWhenEmpty;
++        this.shulkerStackSize = config.qolShulkerEmptyStackSize;
++        this.shulkerOpenInInventory = config.qolShulkerOpenInInventory;
++        this.shulkerMaxNestDepth = config.qolShulkerMaxNestDepth;
++
++        LOGGER.info("InventoryCustomization initialized: enderChestRows=" + enderChestRows +
++                    ", shulkerStackable=" + shulkerStackable);
++    }
++
++    /**
++     * Initialize the singleton instance.
++     */
++    public static void init(SurvivalCoreConfig config) {
++        if (instance != null) {
++            LOGGER.warning("InventoryCustomization already initialized");
++            return;
++        }
++        instance = new InventoryCustomization(config);
++    }
++
++    /**
++     * Get the singleton instance.
++     */
++    public static InventoryCustomization get() {
++        if (instance == null) {
++            throw new IllegalStateException("InventoryCustomization not initialized");
++        }
++        return instance;
++    }
++
++    /**
++     * Get the ender chest inventory size in slots.
++     */
++    public int getEnderChestSize() {
++        return enderChestRows * 9;
++    }
++
++    /**
++     * Get the number of rows for ender chest.
++     */
++    public int getEnderChestRows() {
++        return enderChestRows;
++    }
++
++    /**
++     * Check if empty shulker boxes can stack.
++     */
++    public boolean isShulkerStackable() {
++        return shulkerStackable;
++    }
++
++    /**
++     * Get the maximum stack size for empty shulker boxes.
++     */
++    public int getShulkerStackSize() {
++        return shulkerStackSize;
++    }
++
++    /**
++     * Check if shulker boxes can be opened from inventory.
++     */
++    public boolean canOpenInInventory() {
++        return shulkerOpenInInventory;
++    }
++
++    /**
++     * Check if shulker boxes can be nested at the given depth.
++     *
++     * @param currentDepth current nesting depth (0 = top-level inventory)
++     * @return true if another shulker can be placed at this depth
++     */
++    public boolean canNestShulker(int currentDepth) {
++        return currentDepth < shulkerMaxNestDepth;
++    }
++}

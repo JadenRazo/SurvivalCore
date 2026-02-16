@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/admin/PermissionNodes.java
-@@ -1,0 +_,27 @@
+@@ -1,0 +_,43 @@
 +package net.survivalcore.admin;
 +
 +/**
@@ -25,6 +25,21 @@
 +
 +    /** Permission for /survivalcore version (always allowed) */
 +    public static final String VERSION = BASE + ".version";
++
++    /** Permission for /survivalcore profile */
++    public static final String PROFILE = BASE + ".profile";
++
++    /** Permission for /survivalcore lagspike */
++    public static final String LAGSPIKE = BASE + ".lagspike";
++
++    /** Permission for /survivalcore entity */
++    public static final String ENTITY = BASE + ".entity";
++
++    /** Permission for /survivalcore chunks */
++    public static final String CHUNKS = BASE + ".chunks";
++
++    /** Permission for /survivalcore entities */
++    public static final String ENTITIES = BASE + ".entities";
 +
 +    private PermissionNodes() {}
 +}

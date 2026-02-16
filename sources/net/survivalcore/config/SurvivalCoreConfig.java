@@ -49,6 +49,33 @@ public final class SurvivalCoreConfig {
     public final boolean entityAiDistanceBasedTickFrequency;
     public final boolean entityAiBrainTickBatching;
 
+    // ── Performance: DAB ──────────────────────────────────
+    public final boolean dabEnabled;
+    public final int dabStartDistance;
+    public final int dabMaxTickInterval;
+
+    // ── Performance: Entity Budgets ───────────────────────
+    public final boolean entityBudgetsEnabled;
+    public final int entityBudgetsMaxEntityTimeMs;
+
+    // ── Performance: Item Merge ───────────────────────────
+    public final boolean itemMergeThrottleEnabled;
+    public final int itemMergeCooldownTicks;
+
+    // ── Performance: Farm Detection ───────────────────────
+    public final boolean farmDetectionEnabled;
+    public final int farmSoftThreshold;
+    public final int farmHardThreshold;
+    public final int farmCriticalThreshold;
+    public final boolean farmAlertAdmins;
+
+    // ── Performance: TNT Batching ─────────────────────────
+    public final boolean tntBatchingEnabled;
+    public final double tntGroupRadius;
+
+    // ── Performance: Collision ────────────────────────────
+    public final boolean collisionSkipStationary;
+
     // ── Performance: Memory ──────────────────────────────
     public final boolean objectPoolingEnabled;
 
@@ -58,6 +85,63 @@ public final class SurvivalCoreConfig {
 
     // ── Redstone ─────────────────────────────────────────
     public final String redstoneImplementation;
+
+    // ── Redstone: Observer Debounce ───────────────────────
+    public final boolean observerDebounceEnabled;
+    public final int observerDebounceMinIntervalTicks;
+
+    // ── Survival: Entity Cleanup ──────────────────────────
+    public final boolean entityCleanupEnabled;
+    public final int entityCleanupSoftLimit;
+    public final int entityCleanupHardLimit;
+
+    // ── Fixes ─────────────────────────────────────────────
+    public final boolean fixEnderPearlBorderBypass;
+    public final boolean fixChorusFruitWallPhase;
+    public final boolean fixHeadlessPiston;
+    public final boolean fixBedExplosions;
+    public final boolean fixPortalTrapProtection;
+    public final int fixTntDupeLimit;
+
+    // ── QoL: Phantoms ─────────────────────────────────────
+    public final boolean qolPhantomsEnabled;
+    public final int qolPhantomsMinInsomniaTicks;
+    public final boolean qolPhantomsRequireSky;
+
+    // ── QoL: Sleep ────────────────────────────────────────
+    public final boolean qolSinglePlayerSleep;
+    public final boolean qolSleepClearWeather;
+    public final boolean qolSleepResetPhantoms;
+
+    // ── QoL: Player Head Drops ────────────────────────────
+    public final boolean qolPlayerHeadDropsEnabled;
+    public final double qolPlayerHeadDropsChance;
+
+    // ── QoL: Mob Griefing ─────────────────────────────────
+    public final boolean qolMobGriefingCreeper;
+    public final boolean qolMobGriefingEnderman;
+    public final boolean qolMobGriefingGhast;
+    public final boolean qolMobGriefingWither;
+    public final boolean qolMobGriefingRavager;
+    public final boolean qolMobGriefingFarmlandTrampling;
+
+    // ── QoL: Items & Experience ───────────────────────────
+    public final int qolItemDespawnTimeTicks;
+    public final double qolExpMultiplier;
+
+    // ── QoL: Knockback ────────────────────────────────────
+    public final double qolKnockbackPlayerMultiplier;
+    public final double qolKnockbackMobMultiplier;
+
+    // ── Admin ─────────────────────────────────────────────
+    public final int adminMobSpawningMaxPerChunk;
+    public final boolean adminAutoCleanupEnabled;
+    public final int adminAutoCleanupMaxItemsPerChunk;
+    public final int adminAutoCleanupMaxMinecartsPerChunk;
+    public final int adminAutoCleanupIntervalTicks;
+    public final boolean adminLogExplosions;
+    public final boolean adminLogFireSpread;
+    public final boolean adminLogEntityDamage;
 
     // ── Monitoring ───────────────────────────────────────
     public final boolean monitoringEnabled;
@@ -94,6 +178,38 @@ public final class SurvivalCoreConfig {
         this.entityAiDistanceBasedTickFrequency = ai.node("distance-based-tick-frequency").getBoolean(true);
         this.entityAiBrainTickBatching = ai.node("brain-tick-batching").getBoolean(true);
 
+        // DAB
+        CommentedConfigurationNode dab = ai.node("dab");
+        this.dabEnabled = dab.node("enabled").getBoolean(true);
+        this.dabStartDistance = dab.node("start-distance").getInt(12);
+        this.dabMaxTickInterval = dab.node("max-tick-interval").getInt(20);
+
+        // Entity budgets
+        CommentedConfigurationNode budgets = perf.node("entity-budgets");
+        this.entityBudgetsEnabled = budgets.node("enabled").getBoolean(true);
+        this.entityBudgetsMaxEntityTimeMs = budgets.node("max-entity-time-ms").getInt(25);
+
+        // Item merge
+        CommentedConfigurationNode itemMerge = perf.node("item-merge");
+        this.itemMergeThrottleEnabled = itemMerge.node("throttle-enabled").getBoolean(true);
+        this.itemMergeCooldownTicks = itemMerge.node("cooldown-ticks").getInt(5);
+
+        // Farm detection
+        CommentedConfigurationNode farm = perf.node("farm-detection");
+        this.farmDetectionEnabled = farm.node("enabled").getBoolean(true);
+        this.farmSoftThreshold = farm.node("soft-threshold").getInt(50);
+        this.farmHardThreshold = farm.node("hard-threshold").getInt(100);
+        this.farmCriticalThreshold = farm.node("critical-threshold").getInt(200);
+        this.farmAlertAdmins = farm.node("alert-admins").getBoolean(true);
+
+        // TNT batching
+        CommentedConfigurationNode tnt = perf.node("tnt-batching");
+        this.tntBatchingEnabled = tnt.node("enabled").getBoolean(true);
+        this.tntGroupRadius = tnt.node("group-radius").getDouble(1.0);
+
+        // Collision
+        this.collisionSkipStationary = perf.node("collision", "skip-stationary").getBoolean(true);
+
         this.objectPoolingEnabled = perf.node("memory", "object-pooling").getBoolean(true);
 
         CommentedConfigurationNode random = perf.node("faster-random");
@@ -101,6 +217,75 @@ public final class SurvivalCoreConfig {
         this.fasterRandomGenerator = random.node("generator").getString("Xoroshiro128PlusPlus");
 
         this.redstoneImplementation = root.node("redstone", "implementation").getString("alternate-current");
+
+        // Observer debounce
+        CommentedConfigurationNode observer = root.node("redstone", "observer-debounce");
+        this.observerDebounceEnabled = observer.node("enabled").getBoolean(true);
+        this.observerDebounceMinIntervalTicks = observer.node("min-interval-ticks").getInt(4);
+
+        // Entity cleanup
+        CommentedConfigurationNode cleanup = root.node("survival", "entity-cleanup");
+        this.entityCleanupEnabled = cleanup.node("enabled").getBoolean(true);
+        this.entityCleanupSoftLimit = cleanup.node("soft-limit").getInt(3000);
+        this.entityCleanupHardLimit = cleanup.node("hard-limit").getInt(5000);
+
+        // Fixes
+        CommentedConfigurationNode fixes = root.node("fixes");
+        this.fixEnderPearlBorderBypass = fixes.node("ender-pearl-border-bypass").getBoolean(true);
+        this.fixChorusFruitWallPhase = fixes.node("chorus-fruit-wall-phase").getBoolean(true);
+        this.fixHeadlessPiston = fixes.node("headless-piston").getBoolean(true);
+        this.fixBedExplosions = fixes.node("bed-explosions").getBoolean(true);
+        this.fixPortalTrapProtection = fixes.node("portal-trap-protection").getBoolean(true);
+        this.fixTntDupeLimit = fixes.node("tnt-dupe-limit").getInt(10);
+
+        // QoL: Phantoms
+        CommentedConfigurationNode phantoms = root.node("qol", "phantoms");
+        this.qolPhantomsEnabled = phantoms.node("enabled").getBoolean(false);
+        this.qolPhantomsMinInsomniaTicks = phantoms.node("min-insomnia-ticks").getInt(72000);
+        this.qolPhantomsRequireSky = phantoms.node("require-sky").getBoolean(true);
+
+        // QoL: Sleep
+        CommentedConfigurationNode sleep = root.node("qol", "sleep");
+        this.qolSinglePlayerSleep = sleep.node("single-player-sleep").getBoolean(true);
+        this.qolSleepClearWeather = sleep.node("clear-weather").getBoolean(true);
+        this.qolSleepResetPhantoms = sleep.node("reset-phantoms").getBoolean(true);
+
+        // QoL: Player head drops
+        CommentedConfigurationNode heads = root.node("qol", "player-head-drops");
+        this.qolPlayerHeadDropsEnabled = heads.node("enabled").getBoolean(true);
+        this.qolPlayerHeadDropsChance = heads.node("chance").getDouble(1.0);
+
+        // QoL: Mob griefing
+        CommentedConfigurationNode grief = root.node("qol", "mob-griefing");
+        this.qolMobGriefingCreeper = grief.node("creeper").getBoolean(true);
+        this.qolMobGriefingEnderman = grief.node("enderman").getBoolean(true);
+        this.qolMobGriefingGhast = grief.node("ghast").getBoolean(true);
+        this.qolMobGriefingWither = grief.node("wither").getBoolean(true);
+        this.qolMobGriefingRavager = grief.node("ravager").getBoolean(true);
+        this.qolMobGriefingFarmlandTrampling = grief.node("farmland-trampling").getBoolean(true);
+
+        // QoL: Items & experience
+        this.qolItemDespawnTimeTicks = root.node("qol", "item-despawn-time-ticks").getInt(6000);
+        this.qolExpMultiplier = root.node("qol", "exp-multiplier").getDouble(1.0);
+
+        // QoL: Knockback
+        CommentedConfigurationNode knockback = root.node("qol", "knockback");
+        this.qolKnockbackPlayerMultiplier = knockback.node("player-multiplier").getDouble(1.0);
+        this.qolKnockbackMobMultiplier = knockback.node("mob-multiplier").getDouble(1.0);
+
+        // Admin
+        CommentedConfigurationNode admin = root.node("admin");
+        this.adminMobSpawningMaxPerChunk = admin.node("mob-spawning", "max-per-chunk").getInt(50);
+        CommentedConfigurationNode autoCleanup = admin.node("auto-cleanup");
+        this.adminAutoCleanupEnabled = autoCleanup.node("enabled").getBoolean(true);
+        this.adminAutoCleanupMaxItemsPerChunk = autoCleanup.node("max-items-per-chunk").getInt(500);
+        this.adminAutoCleanupMaxMinecartsPerChunk = autoCleanup.node("max-minecarts-per-chunk").getInt(50);
+        this.adminAutoCleanupIntervalTicks = autoCleanup.node("interval-ticks").getInt(1200);
+
+        CommentedConfigurationNode logging = admin.node("logging");
+        this.adminLogExplosions = logging.node("explosions").getBoolean(true);
+        this.adminLogFireSpread = logging.node("fire-spread").getBoolean(false);
+        this.adminLogEntityDamage = logging.node("entity-damage").getBoolean(false);
 
         CommentedConfigurationNode monitoring = root.node("monitoring");
         this.monitoringEnabled = monitoring.node("enabled").getBoolean(true);
@@ -194,6 +379,43 @@ public final class SurvivalCoreConfig {
         setDefault(ai.node("distance-based-tick-frequency"), true, null);
         setDefault(ai.node("brain-tick-batching"), true, null);
 
+        // DAB
+        CommentedConfigurationNode dab = ai.node("dab");
+        dab.comment("Distance-Activation-Behavior: reduce tick rate for distant entities.");
+        setDefault(dab.node("enabled"), true, null);
+        setDefault(dab.node("start-distance"), 12, "Distance in chunks to start reducing tick rate");
+        setDefault(dab.node("max-tick-interval"), 20, "Max ticks between entity updates");
+
+        // Entity budgets
+        CommentedConfigurationNode budgets = perf.node("entity-budgets");
+        budgets.comment("Per-tick entity processing budget to prevent lag spikes.");
+        setDefault(budgets.node("enabled"), true, null);
+        setDefault(budgets.node("max-entity-time-ms"), 25, "Max milliseconds per tick for entity processing");
+
+        // Item merge
+        CommentedConfigurationNode itemMerge = perf.node("item-merge");
+        itemMerge.comment("Throttle item merging to reduce item entity overhead.");
+        setDefault(itemMerge.node("throttle-enabled"), true, null);
+        setDefault(itemMerge.node("cooldown-ticks"), 5, "Ticks between merge checks");
+
+        // Farm detection
+        CommentedConfigurationNode farm = perf.node("farm-detection");
+        farm.comment("Detect and throttle entity farm hotspots.");
+        setDefault(farm.node("enabled"), true, null);
+        setDefault(farm.node("soft-threshold"), 50, "Entity count to start throttling");
+        setDefault(farm.node("hard-threshold"), 100, "Heavy throttling threshold");
+        setDefault(farm.node("critical-threshold"), 200, "Emergency throttling threshold");
+        setDefault(farm.node("alert-admins"), true, "Alert ops when critical threshold reached");
+
+        // TNT batching
+        CommentedConfigurationNode tnt = perf.node("tnt-batching");
+        tnt.comment("Batch nearby TNT explosions to reduce calculation overhead.");
+        setDefault(tnt.node("enabled"), true, null);
+        setDefault(tnt.node("group-radius"), 1.0, "TNT within this radius explodes together");
+
+        // Collision
+        setDefault(perf.node("collision", "skip-stationary"), true, "Skip collision checks for stationary entities");
+
         setDefault(perf.node("memory", "object-pooling"), true, "Thread-local object pools for BlockPos, Vec3, AABB.");
 
         setDefault(perf.node("faster-random", "enabled"), true, "Use faster random number generators.");
@@ -203,6 +425,90 @@ public final class SurvivalCoreConfig {
         CommentedConfigurationNode redstone = root.node("redstone");
         redstone.comment("Redstone engine configuration.");
         setDefault(redstone.node("implementation"), "alternate-current", "Options: alternate-current, vanilla, eigencraft");
+
+        // Observer debounce
+        CommentedConfigurationNode observer = redstone.node("observer-debounce");
+        observer.comment("Debounce rapid observer updates to prevent lag machines.");
+        setDefault(observer.node("enabled"), true, null);
+        setDefault(observer.node("min-interval-ticks"), 4, "Minimum ticks between observer activations");
+
+        // Survival: Entity cleanup
+        CommentedConfigurationNode survival = root.node("survival");
+        CommentedConfigurationNode cleanup = survival.node("entity-cleanup");
+        cleanup.comment("Automatic entity count limiting to prevent server overload.");
+        setDefault(cleanup.node("enabled"), true, null);
+        setDefault(cleanup.node("soft-limit"), 3000, "Start cleanup warnings");
+        setDefault(cleanup.node("hard-limit"), 5000, "Force entity removal");
+
+        // Fixes
+        CommentedConfigurationNode fixes = root.node("fixes");
+        fixes.comment("Exploit and bug fixes.");
+        setDefault(fixes.node("ender-pearl-border-bypass"), true, "Prevent ender pearls from teleporting through world borders");
+        setDefault(fixes.node("chorus-fruit-wall-phase"), true, "Prevent chorus fruit from phasing through walls");
+        setDefault(fixes.node("headless-piston"), true, "Fix headless piston duplication");
+        setDefault(fixes.node("bed-explosions"), true, "Fix bed explosion exploit");
+        setDefault(fixes.node("portal-trap-protection"), true, "Prevent portal trapping exploits");
+        setDefault(fixes.node("tnt-dupe-limit"), 10, "Max TNT duplication per tick (0 = disable duping entirely)");
+
+        // QoL: Phantoms
+        CommentedConfigurationNode qol = root.node("qol");
+        qol.comment("Quality of life improvements.");
+        CommentedConfigurationNode phantoms = qol.node("phantoms");
+        phantoms.comment("Phantom spawning adjustments.");
+        setDefault(phantoms.node("enabled"), false, "Enable custom phantom behavior (false = vanilla)");
+        setDefault(phantoms.node("min-insomnia-ticks"), 72000, "Ticks before phantoms spawn (vanilla: 72000 = 1 hour)");
+        setDefault(phantoms.node("require-sky"), true, "Only spawn if player can see sky");
+
+        // QoL: Sleep
+        CommentedConfigurationNode sleep = qol.node("sleep");
+        sleep.comment("Sleep mechanics.");
+        setDefault(sleep.node("single-player-sleep"), true, "One player sleeping skips night");
+        setDefault(sleep.node("clear-weather"), true, "Sleeping clears weather");
+        setDefault(sleep.node("reset-phantoms"), true, "Sleeping resets phantom timer");
+
+        // QoL: Player head drops
+        CommentedConfigurationNode heads = qol.node("player-head-drops");
+        heads.comment("Player head drops on PvP death.");
+        setDefault(heads.node("enabled"), true, null);
+        setDefault(heads.node("chance"), 1.0, "Drop chance (1.0 = always, 0.0 = never)");
+
+        // QoL: Mob griefing
+        CommentedConfigurationNode grief = qol.node("mob-griefing");
+        grief.comment("Fine-grained mob griefing control (per mob type).");
+        setDefault(grief.node("creeper"), true, "Creepers destroy blocks");
+        setDefault(grief.node("enderman"), true, "Endermen pick up blocks");
+        setDefault(grief.node("ghast"), true, "Ghasts destroy blocks");
+        setDefault(grief.node("wither"), true, "Withers destroy blocks");
+        setDefault(grief.node("ravager"), true, "Ravagers destroy crops");
+        setDefault(grief.node("farmland-trampling"), true, "Mobs trample farmland");
+
+        // QoL: Items & experience
+        setDefault(qol.node("item-despawn-time-ticks"), 6000, "Item despawn time (vanilla: 6000 = 5 minutes)");
+        setDefault(qol.node("exp-multiplier"), 1.0, "Experience orb multiplier");
+
+        // QoL: Knockback
+        CommentedConfigurationNode knockback = qol.node("knockback");
+        knockback.comment("Knockback multipliers.");
+        setDefault(knockback.node("player-multiplier"), 1.0, "Knockback received by players");
+        setDefault(knockback.node("mob-multiplier"), 1.0, "Knockback received by mobs");
+
+        // Admin
+        CommentedConfigurationNode admin = root.node("admin");
+        admin.comment("Administrative tools and limits.");
+        setDefault(admin.node("mob-spawning", "max-per-chunk"), 50, "Max mobs per chunk");
+
+        CommentedConfigurationNode autoCleanup = admin.node("auto-cleanup");
+        autoCleanup.comment("Automatic cleanup of excessive entities.");
+        setDefault(autoCleanup.node("enabled"), true, null);
+        setDefault(autoCleanup.node("max-items-per-chunk"), 500, "Max item entities per chunk");
+        setDefault(autoCleanup.node("max-minecarts-per-chunk"), 50, "Max minecarts per chunk");
+        setDefault(autoCleanup.node("interval-ticks"), 1200, "Cleanup check interval (1200 = 1 minute)");
+
+        CommentedConfigurationNode logging = admin.node("logging");
+        logging.comment("Action logging for sensitive events.");
+        setDefault(logging.node("explosions"), true, "Log all explosions");
+        setDefault(logging.node("fire-spread"), false, "Log fire spread events");
+        setDefault(logging.node("entity-damage"), false, "Log entity block damage");
 
         // Monitoring
         CommentedConfigurationNode monitoring = root.node("monitoring");

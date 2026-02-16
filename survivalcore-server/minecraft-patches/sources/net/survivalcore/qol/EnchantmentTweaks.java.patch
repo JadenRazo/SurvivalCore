@@ -1,0 +1,65 @@
+--- /dev/null
++++ b/net/survivalcore/qol/EnchantmentTweaks.java
+@@ -1,0 +_,62 @@
++package net.survivalcore.qol;
++
++import net.survivalcore.config.SurvivalCoreConfig;
++
++/**
++ * Anvil and enchantment customization.
++ *
++ * Anvil changes:
++ * - Remove "Too Expensive!" cap (vanilla limit: 40 levels)
++ * - Configurable repair cost multiplier
++ * - Colored item renaming support (MiniMessage format)
++ *
++ * Enchantment changes:
++ * - Per-enchantment max level overrides
++ * - Configurable enchantment table bonus range
++ */
++public final class EnchantmentTweaks {
++
++    private static EnchantmentTweaks instance;
++
++    public final boolean removeTooExpensiveCap;
++    public final int maxAnvilCost;
++    public final double repairCostMultiplier;
++    public final boolean coloredRenaming;
++    public final boolean allowUnsafeEnchantments;
++
++    private EnchantmentTweaks() {
++        SurvivalCoreConfig config = SurvivalCoreConfig.get();
++        this.removeTooExpensiveCap = config.qolAnvilRemoveTooExpensive;
++        this.maxAnvilCost = config.qolAnvilMaxCost;
++        this.repairCostMultiplier = config.qolAnvilRepairCostMultiplier;
++        this.coloredRenaming = config.qolAnvilColoredRenaming;
++        this.allowUnsafeEnchantments = config.qolEnchantmentsAllowUnsafe;
++    }
++
++    public static void init() {
++        if (instance == null) {
++            instance = new EnchantmentTweaks();
++        }
++    }
++
++    public static EnchantmentTweaks get() {
++        if (instance == null) {
++            throw new IllegalStateException("EnchantmentTweaks not initialized");
++        }
++        return instance;
++    }
++
++    public boolean shouldBlockTooExpensive(int cost) {
++        if (removeTooExpensiveCap) return false;
++        if (maxAnvilCost > 0 && cost > maxAnvilCost) return true;
++        return false;
++    }
++
++    public int getAdjustedRepairCost(int baseCost) {
++        return (int)(baseCost * repairCostMultiplier);
++    }
++
++    public boolean canUseColors() {
++        return coloredRenaming;
++    }
++}

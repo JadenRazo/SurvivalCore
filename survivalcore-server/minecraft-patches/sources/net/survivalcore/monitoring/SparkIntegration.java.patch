@@ -1,0 +1,126 @@
+--- /dev/null
++++ b/net/survivalcore/monitoring/SparkIntegration.java
+@@ -1,0 +_,123 @@
++package net.survivalcore.monitoring;
++
++import java.lang.reflect.Method;
++import java.util.concurrent.CompletableFuture;
++import java.util.logging.Level;
++import java.util.logging.Logger;
++import me.lucko.spark.api.Spark;
++import me.lucko.spark.api.SparkProvider;
++import me.lucko.spark.api.profiler.ProfilerType;
++import me.lucko.spark.api.profiler.dumper.HeapDumper;
++
++/**
++ * Integration with the Spark profiler for advanced performance diagnostics.
++ * Spark is bundled with Paper 1.21+ so it's always available.
++ *
++ * Provides /survivalcore profile <cpu|memory|tick> [duration] command support
++ * that triggers Spark profiling sessions programmatically, with fallback
++ * to built-in PerformanceMonitor data.
++ */
++public final class SparkIntegration {
++
++    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
++    private static volatile Spark spark;
++    private static volatile boolean initialized = false;
++    private static volatile boolean available = false;
++
++    private SparkIntegration() {}
++
++    /**
++     * Initialize Spark integration.
++     * Called during server startup after Spark is loaded.
++     */
++    public static void init() {
++        if (initialized) return;
++        initialized = true;
++
++        try {
++            // Spark is available via SparkProvider in Paper 1.21+
++            spark = SparkProvider.get();
++            available = true;
++            LOGGER.info("Spark integration initialized successfully");
++        } catch (Exception e) {
++            LOGGER.log(Level.WARNING, "Spark not available, using fallback monitoring", e);
++            available = false;
++        }
++    }
++
++    /**
++     * Check if Spark is available and ready.
++     */
++    public static boolean isAvailable() {
++        return available && spark != null;
++    }
++
++    /**
++     * Get current profiling status.
++     * Returns a human-readable status string.
++     */
++    public static String getStatus() {
++        if (!isAvailable()) {
++            return "Spark not available";
++        }
++
++        try {
++            // Check if any profiler is running
++            boolean cpuRunning = spark.cpuProfiler() != null && spark.cpuProfiler().isRunning();
++            boolean tickRunning = spark.tickProfiler() != null && spark.tickProfiler().isRunning();
++
++            if (cpuRunning) return "CPU profiler running";
++            if (tickRunning) return "Tick profiler running";
++            return "No active profiler";
++        } catch (Exception e) {
++            LOGGER.log(Level.WARNING, "Error checking Spark status", e);
++            return "Status check failed";
++        }
++    }
++
++    /**
++     * Start a CPU profiler for the specified duration.
++     *
++     * @param durationSeconds how long to profile (1-600 seconds)
++     * @return true if profiler started successfully
++     */
++    public static boolean startCpuProfile(int durationSeconds) {
++        if (!isAvailable()) return false;
++        if (durationSeconds < 1 || durationSeconds > 600) return false;
++
++        try {
++            // Start async CPU profiler
++            CompletableFuture<Void> future = spark.cpuProfiler().start();
++            LOGGER.info("Started CPU profiler for " + durationSeconds + " seconds");
++
++            // Schedule automatic stop
++            scheduleStop(future, durationSeconds, "CPU");
++            return true;
++        } catch (Exception e) {
++            LOGGER.log(Level.WARNING, "Failed to start CPU profiler", e);
++            return false;
++        }
++    }
++
++    /**
++     * Start a tick profiler for the specified duration.
++     */
++    public static boolean startTickProfile(int durationSeconds) {
++        if (!isAvailable()) return false;
++        if (durationSeconds < 1 || durationSeconds > 600) return false;
++
++        try {
++            CompletableFuture<Void> future = spark.tickProfiler().start();
++            LOGGER.info("Started tick profiler for " + durationSeconds + " seconds");
++            scheduleStop(future, durationSeconds, "Tick");
++            return true;
++        } catch (Exception e) {
++            LOGGER.log(Level.WARNING, "Failed to start tick profiler", e);
++            return false;
++        }
++    }
++
++    private static void scheduleStop(CompletableFuture<Void> future, int seconds, String type) {
++        future.completeOnTimeout(null, seconds, java.util.concurrent.TimeUnit.SECONDS);
++    }
++}

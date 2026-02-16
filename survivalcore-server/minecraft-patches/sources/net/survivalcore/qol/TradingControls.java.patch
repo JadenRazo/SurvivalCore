@@ -1,0 +1,75 @@
+--- /dev/null
++++ b/net/survivalcore/qol/TradingControls.java
+@@ -1,0 +_,72 @@
++package net.survivalcore.qol;
++
++import net.survivalcore.config.SurvivalCoreConfig;
++
++/**
++ * Villager trade customization.
++ *
++ * Controls:
++ * - Restock timing multiplier (faster/slower restocking)
++ * - Discount stacking cap (prevent infinite discounts)
++ * - Minimum trade price floor (items never go below X emeralds)
++ * - Zombie cure discount toggle/multiplier
++ * - Trade lock prevention (villagers never lock trades permanently)
++ */
++public final class TradingControls {
++
++    private static TradingControls instance;
++
++    public final double restockTimingMultiplier;
++    public final int maxDiscountPercent;
++    public final int minimumTradePrice;
++    public final boolean zombieCureDiscountEnabled;
++    public final double zombieCureDiscountMultiplier;
++    public final boolean preventTradeLocking;
++
++    private TradingControls() {
++        SurvivalCoreConfig config = SurvivalCoreConfig.get();
++        this.restockTimingMultiplier = config.qolVillagersRestockTimingMultiplier;
++        this.maxDiscountPercent = config.qolVillagersMaxDiscountPercent;
++        this.minimumTradePrice = config.qolVillagersMinimumTradePrice;
++        this.zombieCureDiscountEnabled = config.qolVillagersZombieCureDiscount;
++        this.zombieCureDiscountMultiplier = config.qolVillagersZombieCureDiscountMultiplier;
++        this.preventTradeLocking = config.qolVillagersPreventTradeLocking;
++    }
++
++    public static void init() {
++        if (instance == null) {
++            instance = new TradingControls();
++        }
++    }
++
++    public static TradingControls get() {
++        if (instance == null) {
++            throw new IllegalStateException("TradingControls not initialized");
++        }
++        return instance;
++    }
++
++    public int getAdjustedRestockDelay(int vanillaDelay) {
++        return (int)(vanillaDelay * restockTimingMultiplier);
++    }
++
++    public int clampDiscount(int basePrice, int discountedPrice) {
++        // Apply minimum price floor
++        if (discountedPrice < minimumTradePrice) {
++            discountedPrice = minimumTradePrice;
++        }
++
++        // Apply max discount percent cap
++        int maxDiscount = (int)(basePrice * (maxDiscountPercent / 100.0));
++        int actualDiscount = basePrice - discountedPrice;
++        if (actualDiscount > maxDiscount) {
++            discountedPrice = basePrice - maxDiscount;
++        }
++
++        return Math.max(minimumTradePrice, discountedPrice);
++    }
++
++    public boolean shouldApplyCureDiscount() {
++        return zombieCureDiscountEnabled;
++    }
++}

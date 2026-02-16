@@ -1,0 +1,163 @@
+--- /dev/null
++++ b/net/survivalcore/async/AsyncChunkIO.java
+@@ -1,0 +_,160 @@
++package net.survivalcore.async;
++
++import java.util.concurrent.*;
++import java.util.concurrent.atomic.AtomicInteger;
++import java.util.concurrent.atomic.AtomicLong;
++import java.util.logging.Level;
++import java.util.logging.Logger;
++import net.survivalcore.config.SurvivalCoreConfig;
++
++/**
++ * Async chunk I/O engine - offloads chunk reads to a dedicated thread pool.
++ *
++ * Chunk loading has two phases:
++ * Phase 1 (async): Read region file, decompress, parse NBT
++ * Phase 2 (main thread): Entity/block entity creation, event firing
++ *
++ * This class manages Phase 1 to reduce main thread stalls.
++ */
++public final class AsyncChunkIO {
++    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
++    private static volatile AsyncChunkIO instance;
++
++    private final ExecutorService ioPool;
++    private final AtomicLong pendingReads = new AtomicLong(0);
++    private final AtomicLong completedReads = new AtomicLong(0);
++    private final int maxQueueSize;
++    private final boolean enabled;
++
++    private AsyncChunkIO(int threads, int queueSize) {
++        this.maxQueueSize = queueSize;
++        this.enabled = true;
++
++        ThreadFactory factory = new ThreadFactory() {
++            private final AtomicInteger count = new AtomicInteger(0);
++
++            @Override
++            public Thread newThread(Runnable r) {
++                Thread t = new Thread(r, "SurvivalCore-ChunkIO-" + count.getAndIncrement());
++                t.setDaemon(true);
++                t.setPriority(Thread.NORM_PRIORITY - 1); // Lower priority than main thread
++                return t;
++            }
++        };
++
++        this.ioPool = new ThreadPoolExecutor(
++            threads,
++            threads,
++            60L, TimeUnit.SECONDS,
++            new LinkedBlockingQueue<>(queueSize),
++            factory,
++            new ThreadPoolExecutor.CallerRunsPolicy() // Fallback to main thread if queue full
++        );
++
++        LOGGER.info("Async chunk I/O initialized with " + threads + " threads (queue size: " + queueSize + ")");
++    }
++
++    /**
++     * Initialize the async chunk I/O system.
++     * Called during server startup.
++     */
++    public static void init() {
++        SurvivalCoreConfig config = SurvivalCoreConfig.get();
++        if (!config.asyncChunkIOEnabled) {
++            LOGGER.info("Async chunk I/O is disabled");
++            return;
++        }
++
++        int threads = config.asyncChunkIOThreads;
++        if (threads <= 0) {
++            threads = Math.max(2, Runtime.getRuntime().availableProcessors() / 4);
++        }
++
++        instance = new AsyncChunkIO(threads, config.asyncChunkIOQueueSize);
++    }
++
++    public static AsyncChunkIO get() {
++        return instance;
++    }
++
++    public static boolean isEnabled() {
++        return instance != null && instance.enabled;
++    }
++
++    /**
++     * Submit a chunk read task to the async pool.
++     *
++     * @param task the chunk read operation (typically NBT parsing)
++     * @return a CompletableFuture that completes when the read is done
++     */
++    public <T> CompletableFuture<T> submit(Callable<T> task) {
++        if (!enabled) {
++            // If disabled, execute synchronously
++            try {
++                return CompletableFuture.completedFuture(task.call());
++            } catch (Exception e) {
++                CompletableFuture<T> failed = new CompletableFuture<>();
++                failed.completeExceptionally(e);
++                return failed;
++            }
++        }
++
++        pendingReads.incrementAndGet();
++
++        CompletableFuture<T> future = new CompletableFuture<>();
++        ioPool.execute(() -> {
++            try {
++                T result = task.call();
++                future.complete(result);
++                completedReads.incrementAndGet();
++                pendingReads.decrementAndGet();
++            } catch (Exception e) {
++                LOGGER.log(Level.WARNING, "Async chunk I/O task failed", e);
++                future.completeExceptionally(e);
++                pendingReads.decrementAndGet();
++            }
++        });
++
++        return future;
++    }
++
++    /**
++     * Get statistics about chunk I/O operations.
++     *
++     * @return array [pending reads, completed reads, queue utilization %]
++     */
++    public long[] getStats() {
++        long pending = pendingReads.get();
++        long completed = completedReads.get();
++        long utilization = (pending * 100) / maxQueueSize;
++        return new long[] { pending, completed, utilization };
++    }
++
++    /**
++     * Shut down the I/O thread pool gracefully.
++     * Waits up to 10 seconds for pending tasks to complete.
++     */
++    public void shutdown() {
++        if (ioPool == null) return;
++
++        LOGGER.info("Shutting down async chunk I/O...");
++        ioPool.shutdown();
++
++        try {
++            if (!ioPool.awaitTermination(10, TimeUnit.SECONDS)) {
++                LOGGER.warning("Async chunk I/O pool did not terminate in time, forcing shutdown");
++                ioPool.shutdownNow();
++
++                if (!ioPool.awaitTermination(5, TimeUnit.SECONDS)) {
++                    LOGGER.severe("Async chunk I/O pool did not terminate after forced shutdown");
++                }
++            }
++        } catch (InterruptedException e) {
++            ioPool.shutdownNow();
++            Thread.currentThread().interrupt();
++        }
++
++        long[] stats = getStats();
++        LOGGER.info("Async chunk I/O shutdown complete (total completed: " + stats[1] + ")");
++    }
++}

@@ -75,6 +75,48 @@ public final class EntityAIOptimizer {
     }
 
     /**
+     * DAB: Dynamic Activation of Brain
+     *
+     * Continuous gradient from tick interval 1 (at startDistance) to maxInterval
+     * (at activation range). Uses linear interpolation for smooth scaling.
+     * Uses (currentTick + entityId) % interval == 0 for staggered distribution.
+     *
+     * More aggressive than fixed-tier system - entities gradually tick less
+     * frequently as they move away from players, without discrete jumps.
+     *
+     * @param distanceSqToNearestPlayer squared distance to nearest player
+     * @param currentTick               the current server tick
+     * @param entityId                  entity's numeric ID for tick offset
+     * @param activationRangeSq         squared activation range (from Paper config)
+     * @return true if the entity should tick its AI this tick
+     */
+    public static boolean shouldTickAI_DAB(double distanceSqToNearestPlayer, long currentTick, int entityId, double activationRangeSq) {
+        SurvivalCoreConfig config = SurvivalCoreConfig.get();
+        if (!config.dabEnabled) {
+            return true;
+        }
+
+        double startDistSq = config.dabStartDistance * config.dabStartDistance;
+        int maxInterval = config.dabMaxTickInterval;
+
+        // Always tick when close
+        if (distanceSqToNearestPlayer <= startDistSq) {
+            return true;
+        }
+
+        // Maximum interval at activation range
+        if (distanceSqToNearestPlayer >= activationRangeSq) {
+            return (currentTick + entityId) % maxInterval == 0;
+        }
+
+        // Linear interpolation between startDistance and activationRange
+        double t = (distanceSqToNearestPlayer - startDistSq) / (activationRangeSq - startDistSq);
+        int interval = 1 + (int) (t * (maxInterval - 1));
+
+        return (currentTick + entityId) % interval == 0;
+    }
+
+    /**
      * Calculate the batch group for brain tick batching.
      * Entities of the same type in the same batch group are ticked together
      * for better CPU cache utilization.

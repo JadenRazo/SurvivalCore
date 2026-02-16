@@ -1,0 +1,120 @@
+--- /dev/null
++++ b/net/survivalcore/api/events/FarmDetectedEvent.java
+@@ -1,0 +_,117 @@
++package net.survivalcore.api.events;
++
++import org.bukkit.event.Cancellable;
++import org.bukkit.event.Event;
++import org.bukkit.event.HandlerList;
++
++/**
++ * Fired when a chunk exceeds the farm detection threshold.
++ *
++ * <p>This event is fired when SurvivalCore's farm detection system identifies
++ * a chunk with abnormally high entity density, indicating a mob farm or
++ * entity accumulation point.
++ *
++ * <p>The event is cancellable. If cancelled, the throttling won't be applied
++ * to entities in this chunk for this tick.
++ */
++public class FarmDetectedEvent extends Event implements Cancellable {
++
++    private static final HandlerList HANDLERS = new HandlerList();
++
++    private final int chunkX;
++    private final int chunkZ;
++    private final String worldName;
++    private final int entityCount;
++    private final ThrottleLevel threshold;
++    private boolean cancelled = false;
++
++    /**
++     * Create a new farm detected event.
++     *
++     * @param chunkX      chunk X coordinate
++     * @param chunkZ      chunk Z coordinate
++     * @param worldName   world name
++     * @param entityCount number of entities in the chunk
++     * @param threshold   which threshold was exceeded
++     */
++    public FarmDetectedEvent(int chunkX, int chunkZ, String worldName, int entityCount, ThrottleLevel threshold) {
++        this.chunkX = chunkX;
++        this.chunkZ = chunkZ;
++        this.worldName = worldName;
++        this.entityCount = entityCount;
++        this.threshold = threshold;
++    }
++
++    /**
++     * Get the chunk X coordinate.
++     *
++     * @return chunk X
++     */
++    public int getChunkX() {
++        return chunkX;
++    }
++
++    /**
++     * Get the chunk Z coordinate.
++     *
++     * @return chunk Z
++     */
++    public int getChunkZ() {
++        return chunkZ;
++    }
++
++    /**
++     * Get the world name.
++     *
++     * @return world name
++     */
++    public String getWorldName() {
++        return worldName;
++    }
++
++    /**
++     * Get the entity count in the chunk.
++     *
++     * @return entity count
++     */
++    public int getEntityCount() {
++        return entityCount;
++    }
++
++    /**
++     * Get the throttle level that was triggered.
++     *
++     * @return throttle level
++     */
++    public ThrottleLevel getThreshold() {
++        return threshold;
++    }
++
++    @Override
++    public boolean isCancelled() {
++        return cancelled;
++    }
++
++    @Override
++    public void setCancelled(boolean cancel) {
++        this.cancelled = cancel;
++    }
++
++    @Override
++    public HandlerList getHandlers() {
++        return HANDLERS;
++    }
++
++    public static HandlerList getHandlerList() {
++        return HANDLERS;
++    }
++
++    /**
++     * Farm detection throttle levels.
++     */
++    public enum ThrottleLevel {
++        SOFT,     // Entities tick every other tick (divisor 2)
++        HARD,     // Entities tick every 4th tick (divisor 4)
++        CRITICAL  // Entities tick every 8th tick (divisor 8)
++    }
++}

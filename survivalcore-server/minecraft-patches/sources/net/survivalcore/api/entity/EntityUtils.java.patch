@@ -1,0 +1,127 @@
+--- /dev/null
++++ b/net/survivalcore/api/entity/EntityUtils.java
+@@ -1,0 +_,124 @@
++package net.survivalcore.api.entity;
++
++import net.survivalcore.survival.EntityTickBudget;
++import net.survivalcore.survival.FarmDetector;
++import org.bukkit.Chunk;
++import org.bukkit.entity.Entity;
++import org.bukkit.entity.Villager;
++
++/**
++ * Entity utility methods for plugins.
++ *
++ * <p>Provides read-only access to SurvivalCore's entity management systems,
++ * including farm detection, tick budgeting, and AI optimization status.
++ */
++public final class EntityUtils {
++
++    /**
++     * Check if an entity is in a farm-detected chunk.
++     *
++     * <p>Entities in farm-detected chunks may tick less frequently
++     * depending on the density level.
++     *
++     * @param entity the entity to check
++     * @return true if the entity's chunk is farm-detected
++     */
++    public boolean isInFarm(Entity entity) {
++        if (!FarmDetector.isEnabled() || entity == null) {
++            return false;
++        }
++
++        Chunk chunk = entity.getLocation().getChunk();
++        long chunkKey = getChunkKey(chunk.getX(), chunk.getZ());
++        int divisor = FarmDetector.get().getTickDivisor(chunkKey);
++
++        return divisor > 1;
++    }
++
++    /**
++     * Get the current tick interval for an entity based on its chunk.
++     *
++     * <p>Returns 1 for normal ticking (every tick), 2 for every other tick,
++     * 4 for every fourth tick, or 8 for every eighth tick.
++     *
++     * @param entity the entity to check
++     * @return tick interval (1, 2, 4, or 8)
++     */
++    public int getEntityTickInterval(Entity entity) {
++        if (!FarmDetector.isEnabled() || entity == null) {
++            return 1;
++        }
++
++        Chunk chunk = entity.getLocation().getChunk();
++        long chunkKey = getChunkKey(chunk.getX(), chunk.getZ());
++
++        return FarmDetector.get().getTickDivisor(chunkKey);
++    }
++
++    /**
++     * Check if a villager has been lobotomized (AI disabled).
++     *
++     * <p>Lobotomized villagers have their AI goals and brain disabled
++     * to reduce processing overhead. This is applied by the VillagerLobotomize
++     * system when villagers are in enclosed spaces.
++     *
++     * @param villager the villager to check
++     * @return true if lobotomized
++     */
++    public boolean isLobotomized(Villager villager) {
++        if (villager == null) {
++            return false;
++        }
++
++        // Check if the villager has no active AI goals
++        return !villager.isAware();
++    }
++
++    /**
++     * Get the entity count in the same chunk as the given entity.
++     *
++     * @param entity the entity whose chunk to check
++     * @return entity count in the chunk
++     */
++    public int getChunkEntityCount(Entity entity) {
++        if (entity == null) {
++            return 0;
++        }
++
++        Chunk chunk = entity.getLocation().getChunk();
++        return chunk.getEntities().length;
++    }
++
++    /**
++     * Get the farm throttle level for an entity's chunk.
++     *
++     * <p>Returns one of:
++     * <ul>
++     *   <li>"none" - No throttling (tick every tick)</li>
++     *   <li>"soft" - Soft throttling (tick every other tick)</li>
++     *   <li>"hard" - Hard throttling (tick every 4th tick)</li>
++     *   <li>"critical" - Critical throttling (tick every 8th tick)</li>
++     * </ul>
++     *
++     * @param entity the entity to check
++     * @return throttle level name
++     */
++    public String getFarmThrottleLevel(Entity entity) {
++        if (!FarmDetector.isEnabled() || entity == null) {
++            return "none";
++        }
++
++        int divisor = getEntityTickInterval(entity);
++
++        return switch (divisor) {
++            case 8 -> "critical";
++            case 4 -> "hard";
++            case 2 -> "soft";
++            default -> "none";
++        };
++    }
++
++    private long getChunkKey(int chunkX, int chunkZ) {
++        return ((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL);
++    }
++}

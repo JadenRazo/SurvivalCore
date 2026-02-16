@@ -1,0 +1,87 @@
+--- /dev/null
++++ b/net/survivalcore/api/events/EntityBudgetExceededEvent.java
+@@ -1,0 +_,84 @@
++package net.survivalcore.api.events;
++
++import org.bukkit.event.Event;
++import org.bukkit.event.HandlerList;
++
++/**
++ * Fired when the per-tick entity budget is exhausted.
++ *
++ * <p>This event is fired when SurvivalCore's entity tick budgeting system
++ * runs out of time budget during entity processing, causing some entities
++ * to be deferred until the next tick.
++ *
++ * <p>This event is informational only and cannot be cancelled, as the
++ * entities have already been deferred.
++ */
++public class EntityBudgetExceededEvent extends Event {
++
++    private static final HandlerList HANDLERS = new HandlerList();
++
++    private final int entitiesProcessed;
++    private final int entitiesDeferred;
++    private final long budgetMs;
++    private final long actualMs;
++
++    /**
++     * Create a new entity budget exceeded event.
++     *
++     * @param entitiesProcessed number of entities that were processed
++     * @param entitiesDeferred  number of entities deferred to next tick
++     * @param budgetMs          the configured time budget in milliseconds
++     * @param actualMs          actual time spent in milliseconds
++     */
++    public EntityBudgetExceededEvent(int entitiesProcessed, int entitiesDeferred, long budgetMs, long actualMs) {
++        this.entitiesProcessed = entitiesProcessed;
++        this.entitiesDeferred = entitiesDeferred;
++        this.budgetMs = budgetMs;
++        this.actualMs = actualMs;
++    }
++
++    /**
++     * Get the number of entities that were processed.
++     *
++     * @return entities processed
++     */
++    public int getEntitiesProcessed() {
++        return entitiesProcessed;
++    }
++
++    /**
++     * Get the number of entities deferred to the next tick.
++     *
++     * @return entities deferred
++     */
++    public int getEntitiesDeferred() {
++        return entitiesDeferred;
++    }
++
++    /**
++     * Get the configured time budget in milliseconds.
++     *
++     * @return budget in ms
++     */
++    public long getBudgetMs() {
++        return budgetMs;
++    }
++
++    /**
++     * Get the actual time spent in milliseconds.
++     *
++     * @return actual time in ms
++     */
++    public long getActualMs() {
++        return actualMs;
++    }
++
++    @Override
++    public HandlerList getHandlers() {
++        return HANDLERS;
++    }
++
++    public static HandlerList getHandlerList() {
++        return HANDLERS;
++    }
++}

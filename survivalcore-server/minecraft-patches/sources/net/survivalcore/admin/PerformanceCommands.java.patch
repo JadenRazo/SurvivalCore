@@ -1,0 +1,206 @@
+--- /dev/null
++++ b/net/survivalcore/admin/PerformanceCommands.java
+@@ -1,0 +_,204 @@
++package net.survivalcore.admin;
++
++import java.util.ArrayList;
++import java.util.Comparator;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Locale;
++import java.util.Map;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.kyori.adventure.text.format.TextDecoration;
++import org.bukkit.Bukkit;
++import org.bukkit.Chunk;
++import org.bukkit.World;
++import org.bukkit.command.CommandSender;
++import org.bukkit.entity.Entity;
++import org.bukkit.entity.EntityType;
++
++/**
++ * Performance analysis subcommands for /survivalcore.
++ *
++ * Subcommands:
++ * - chunks top [n] — Show N most loaded chunks with entity counts
++ * - entities top [n] — Show N most common entity types across all worlds
++ */
++public final class PerformanceCommands {
++
++    /**
++     * Execute chunks top subcommand.
++     * Shows the most entity-dense chunks.
++     */
++    public static void executeChunksTop(CommandSender sender, String[] args) {
++        // args: ["chunks", "top", [n]]
++        int limit = 10;
++
++        if (args.length > 2) {
++            try {
++                limit = Integer.parseInt(args[2]);
++                if (limit <= 0 || limit > 50) {
++                    sender.sendMessage(Component.text("Limit must be between 1 and 50", NamedTextColor.RED));
++                    return;
++                }
++            } catch (NumberFormatException e) {
++                sender.sendMessage(
++                    Component.text("Invalid number: ", NamedTextColor.RED)
++                        .append(Component.text(args[2], NamedTextColor.GOLD))
++                );
++                return;
++            }
++        }
++
++        sender.sendMessage(Component.empty());
++        sender.sendMessage(
++            Component.text("Top " + limit + " Loaded Chunks by Entity Count", NamedTextColor.GOLD, TextDecoration.BOLD)
++        );
++        sender.sendMessage(Component.empty());
++
++        record ChunkData(String world, int x, int z, int entityCount) {}
++
++        List<ChunkData> chunkList = new ArrayList<>();
++
++        for (World world : Bukkit.getWorlds()) {
++            for (Chunk chunk : world.getLoadedChunks()) {
++                int count = chunk.getEntities().length;
++                if (count > 0) {
++                    chunkList.add(new ChunkData(world.getName(), chunk.getX(), chunk.getZ(), count));
++                }
++            }
++        }
++
++        chunkList.sort(Comparator.comparingInt(ChunkData::entityCount).reversed());
++
++        int shown = 0;
++        for (ChunkData data : chunkList) {
++            if (shown >= limit) break;
++
++            sender.sendMessage(
++                Component.text("  " + (shown + 1) + ". ", NamedTextColor.DARK_GRAY)
++                    .append(Component.text(data.world, NamedTextColor.YELLOW))
++                    .append(Component.text(" (", NamedTextColor.DARK_GRAY))
++                    .append(Component.text(data.x, NamedTextColor.WHITE))
++                    .append(Component.text(", ", NamedTextColor.DARK_GRAY))
++                    .append(Component.text(data.z, NamedTextColor.WHITE))
++                    .append(Component.text(")", NamedTextColor.DARK_GRAY))
++                    .append(Component.text(" - ", NamedTextColor.DARK_GRAY))
++                    .append(Component.text(data.entityCount + " entities", getCountColor(data.entityCount)))
++            );
++
++            shown++;
++        }
++
++        if (shown == 0) {
++            sender.sendMessage(Component.text("  No loaded chunks with entities", NamedTextColor.GRAY));
++        }
++
++        sender.sendMessage(Component.empty());
++        sender.sendMessage(
++            Component.text("Total loaded chunks scanned: ", NamedTextColor.DARK_GRAY)
++                .append(Component.text(chunkList.size(), NamedTextColor.WHITE))
++        );
++        sender.sendMessage(Component.empty());
++    }
++
++    /**
++     * Execute entities top subcommand.
++     * Shows the most common entity types across all worlds.
++     */
++    public static void executeEntitiesTop(CommandSender sender, String[] args) {
++        // args: ["entities", "top", [n]]
++        int limit = 10;
++
++        if (args.length > 2) {
++            try {
++                limit = Integer.parseInt(args[2]);
++                if (limit <= 0 || limit > 50) {
++                    sender.sendMessage(Component.text("Limit must be between 1 and 50", NamedTextColor.RED));
++                    return;
++                }
++            } catch (NumberFormatException e) {
++                sender.sendMessage(
++                    Component.text("Invalid number: ", NamedTextColor.RED)
++                        .append(Component.text(args[2], NamedTextColor.GOLD))
++                );
++                return;
++            }
++        }
++
++        sender.sendMessage(Component.empty());
++        sender.sendMessage(
++            Component.text("Top " + limit + " Entity Types by Count", NamedTextColor.GOLD, TextDecoration.BOLD)
++        );
++        sender.sendMessage(Component.empty());
++
++        Map<EntityType, Integer> counts = new HashMap<>();
++        int total = 0;
++
++        for (World world : Bukkit.getWorlds()) {
++            for (Entity entity : world.getEntities()) {
++                counts.merge(entity.getType(), 1, Integer::sum);
++                total++;
++            }
++        }
++
++        List<Map.Entry<EntityType, Integer>> sorted = new ArrayList<>(counts.entrySet());
++        sorted.sort(Map.Entry.<EntityType, Integer>comparingByValue().reversed());
++
++        int shown = 0;
++        for (Map.Entry<EntityType, Integer> entry : sorted) {
++            if (shown >= limit) break;
++
++            double percentage = total > 0 ? (entry.getValue() * 100.0 / total) : 0;
++
++            sender.sendMessage(
++                Component.text("  " + (shown + 1) + ". ", NamedTextColor.DARK_GRAY)
++                    .append(Component.text(formatEntityType(entry.getKey()), NamedTextColor.YELLOW))
++                    .append(Component.text(": ", NamedTextColor.DARK_GRAY))
++                    .append(Component.text(entry.getValue(), NamedTextColor.WHITE))
++                    .append(Component.text(" (", NamedTextColor.DARK_GRAY))
++                    .append(Component.text(String.format("%.1f%%", percentage), NamedTextColor.GRAY))
++                    .append(Component.text(")", NamedTextColor.DARK_GRAY))
++            );
++
++            shown++;
++        }
++
++        if (shown == 0) {
++            sender.sendMessage(Component.text("  No entities found", NamedTextColor.GRAY));
++        }
++
++        sender.sendMessage(Component.empty());
++        sender.sendMessage(
++            Component.text("Total entities: ", NamedTextColor.DARK_GRAY)
++                .append(Component.text(total, NamedTextColor.GREEN, TextDecoration.BOLD))
++        );
++        sender.sendMessage(Component.empty());
++    }
++
++    /**
++     * Tab completion for performance subcommands.
++     */
++    public static List<String> tabComplete(CommandSender sender, String[] args) {
++        if (args.length == 2) {
++            String partial = args[1].toLowerCase(Locale.ENGLISH);
++            return List.of("top").stream()
++                .filter(sub -> sub.startsWith(partial))
++                .toList();
++        }
++
++        return List.of();
++    }
++
++    private static String formatEntityType(EntityType type) {
++        String name = type.name().toLowerCase(Locale.ENGLISH).replace('_', ' ');
++        return name.substring(0, 1).toUpperCase(Locale.ENGLISH) + name.substring(1);
++    }
++
++    private static NamedTextColor getCountColor(int count) {
++        if (count > 100) return NamedTextColor.RED;
++        if (count > 50) return NamedTextColor.YELLOW;
++        if (count > 20) return NamedTextColor.WHITE;
++        return NamedTextColor.GRAY;
++    }
++}

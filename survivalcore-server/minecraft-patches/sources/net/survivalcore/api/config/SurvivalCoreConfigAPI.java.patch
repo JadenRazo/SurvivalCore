@@ -1,0 +1,170 @@
+--- /dev/null
++++ b/net/survivalcore/api/config/SurvivalCoreConfigAPI.java
+@@ -1,0 +_,167 @@
++package net.survivalcore.api.config;
++
++import net.survivalcore.config.SurvivalCoreConfig;
++
++import java.lang.reflect.Field;
++import java.util.logging.Level;
++import java.util.logging.Logger;
++
++/**
++ * Read-only configuration access for plugins.
++ *
++ * <p>Provides a reflection-free way to query SurvivalCore config values
++ * by feature name or path.
++ */
++public final class SurvivalCoreConfigAPI {
++
++    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
++
++    /**
++     * Check if a feature is enabled by name.
++     *
++     * <p>Common feature names:
++     * <ul>
++     *   <li>async-entity-tracker</li>
++     *   <li>async-pathfinding</li>
++     *   <li>async-mob-spawning</li>
++     *   <li>async-chunk-preloading</li>
++     *   <li>async-chunk-io</li>
++     *   <li>simd</li>
++     *   <li>fast-math</li>
++     *   <li>fast-lighting</li>
++     *   <li>hopper-optimization</li>
++     *   <li>entity-ai-throttle</li>
++     *   <li>dab (Distance-Activation-Behavior)</li>
++     *   <li>entity-budgets</li>
++     *   <li>item-merge-throttle</li>
++     *   <li>farm-detection</li>
++     *   <li>tnt-batching</li>
++     *   <li>object-pooling</li>
++     *   <li>faster-random</li>
++     * </ul>
++     *
++     * @param featureName feature identifier (kebab-case)
++     * @return true if enabled
++     */
++    public boolean isFeatureEnabled(String featureName) {
++        SurvivalCoreConfig config = SurvivalCoreConfig.get();
++        if (config == null) return false;
++
++        return switch (featureName.toLowerCase()) {
++            case "async-entity-tracker" -> config.asyncEntityTrackerEnabled;
++            case "async-pathfinding" -> config.asyncPathfindingEnabled;
++            case "async-mob-spawning" -> config.asyncMobSpawningEnabled;
++            case "async-chunk-preloading" -> config.asyncChunkPreloadingEnabled;
++            case "async-chunk-io" -> config.asyncChunkIOEnabled;
++            case "simd" -> config.simdEnabled;
++            case "fast-math" -> config.fastMathEnabled;
++            case "fast-lighting" -> config.fastLightingEnabled;
++            case "hopper-optimization" -> config.hopperOptimizedCaching;
++            case "entity-ai-throttle" -> config.entityAiGoalSelectorThrottle;
++            case "dab" -> config.dabEnabled;
++            case "entity-budgets" -> config.entityBudgetsEnabled;
++            case "item-merge-throttle" -> config.itemMergeThrottleEnabled;
++            case "farm-detection" -> config.farmDetectionEnabled;
++            case "tnt-batching" -> config.tntBatchingEnabled;
++            case "object-pooling" -> config.objectPoolingEnabled;
++            case "faster-random" -> config.fasterRandomEnabled;
++            default -> false;
++        };
++    }
++
++    /**
++     * Get an integer configuration value by field name.
++     *
++     * @param fieldName the config field name (camelCase)
++     * @return the value, or -1 if not found or not an integer
++     */
++    public int getIntValue(String fieldName) {
++        SurvivalCoreConfig config = SurvivalCoreConfig.get();
++        if (config == null) return -1;
++
++        try {
++            Field field = SurvivalCoreConfig.class.getField(fieldName);
++            Object value = field.get(config);
++
++            if (value instanceof Integer) {
++                return (int) value;
++            }
++        } catch (NoSuchFieldException | IllegalAccessException e) {
++            LOGGER.log(Level.WARNING, "Failed to get config field: " + fieldName, e);
++        }
++
++        return -1;
++    }
++
++    /**
++     * Get a double configuration value by field name.
++     *
++     * @param fieldName the config field name (camelCase)
++     * @return the value, or 0.0 if not found or not a double
++     */
++    public double getDoubleValue(String fieldName) {
++        SurvivalCoreConfig config = SurvivalCoreConfig.get();
++        if (config == null) return 0.0;
++
++        try {
++            Field field = SurvivalCoreConfig.class.getField(fieldName);
++            Object value = field.get(config);
++
++            if (value instanceof Double) {
++                return (double) value;
++            }
++        } catch (NoSuchFieldException | IllegalAccessException e) {
++            LOGGER.log(Level.WARNING, "Failed to get config field: " + fieldName, e);
++        }
++
++        return 0.0;
++    }
++
++    /**
++     * Get a boolean configuration value by field name.
++     *
++     * @param fieldName the config field name (camelCase)
++     * @return the value, or false if not found or not a boolean
++     */
++    public boolean getBooleanValue(String fieldName) {
++        SurvivalCoreConfig config = SurvivalCoreConfig.get();
++        if (config == null) return false;
++
++        try {
++            Field field = SurvivalCoreConfig.class.getField(fieldName);
++            Object value = field.get(config);
++
++            if (value instanceof Boolean) {
++                return (boolean) value;
++            }
++        } catch (NoSuchFieldException | IllegalAccessException e) {
++            LOGGER.log(Level.WARNING, "Failed to get config field: " + fieldName, e);
++        }
++
++        return false;
++    }
++
++    /**
++     * Get a string configuration value by field name.
++     *
++     * @param fieldName the config field name (camelCase)
++     * @return the value, or empty string if not found or not a string
++     */
++    public String getStringValue(String fieldName) {
++        SurvivalCoreConfig config = SurvivalCoreConfig.get();
++        if (config == null) return "";
++
++        try {
++            Field field = SurvivalCoreConfig.class.getField(fieldName);
++            Object value = field.get(config);
++
++            if (value instanceof String) {
++                return (String) value;
++            }
++        } catch (NoSuchFieldException | IllegalAccessException e) {
++            LOGGER.log(Level.WARNING, "Failed to get config field: " + fieldName, e);
++        }
++
++        return "";
++    }
++}

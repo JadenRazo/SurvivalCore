@@ -1,0 +1,180 @@
+--- /dev/null
++++ b/net/survivalcore/qol/RideableMobs.java
+@@ -1,0 +_,177 @@
++package net.survivalcore.qol;
++
++import java.util.HashMap;
++import java.util.Map;
++import java.util.Set;
++import java.util.logging.Logger;
++import net.survivalcore.config.SurvivalCoreConfig;
++
++/**
++ * Universal mob riding — allows players to mount and control most mob types.
++ * Enabled per-type with configurable speed and jump multipliers.
++ *
++ * When a player rides a mob with WASD controls:
++ * - Forward/backward/strafe inputs map to mob movement
++ * - Jump input triggers mob jump (if jump-capable)
++ * - Dismount via shift
++ *
++ * Per-mob-type configuration:
++ * - Speed multiplier (how fast the mob moves under control)
++ * - Jump multiplier (jump height when riding)
++ * - Whether a saddle is required
++ */
++public final class RideableMobs {
++
++    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
++    private static RideableMobs instance;
++
++    /**
++     * Per-mob ride configuration.
++     */
++    public record MobRideSettings(
++        boolean enabled,
++        double speedMultiplier,
++        double jumpMultiplier,
++        boolean requiresSaddle
++    ) {
++        public static final MobRideSettings DEFAULT = new MobRideSettings(false, 1.0, 1.0, false);
++        public static final MobRideSettings STANDARD = new MobRideSettings(true, 1.0, 1.0, false);
++    }
++
++    // Map of mob type ID to ride settings
++    private final Map<String, MobRideSettings> mobSettings = new HashMap<>();
++    private final boolean globalEnabled;
++    private final boolean requirePermission;
++    private final boolean requireSaddle;
++    private final double defaultSpeedMultiplier;
++    private final double defaultJumpMultiplier;
++
++    // Mob types that support riding (matching entity type names)
++    private static final Set<String> SUPPORTED_MOBS = Set.of(
++        "cow", "pig", "sheep", "chicken", "rabbit",
++        "wolf", "cat", "fox", "goat", "panda",
++        "dolphin", "polar_bear", "llama", "trader_llama",
++        "iron_golem", "snow_golem", "bee", "spider",
++        "cave_spider", "zombie", "skeleton", "creeper",
++        "enderman", "blaze", "witch", "ravager",
++        "warden", "sniffer", "camel", "armadillo"
++    );
++
++    private RideableMobs(SurvivalCoreConfig config) {
++        this.globalEnabled = config.qolRideableMobsEnabled;
++        this.requirePermission = config.qolRideableMobsRequirePermission;
++        this.requireSaddle = config.qolRideableMobsRequireSaddle;
++        this.defaultSpeedMultiplier = config.qolRideableMobsDefaultSpeedMultiplier;
++        this.defaultJumpMultiplier = config.qolRideableMobsDefaultJumpMultiplier;
++
++        // Initialize all supported mobs with default settings
++        for (String mobType : SUPPORTED_MOBS) {
++            mobSettings.put(mobType, new MobRideSettings(
++                true,
++                defaultSpeedMultiplier,
++                defaultJumpMultiplier,
++                requireSaddle
++            ));
++        }
++
++        if (globalEnabled) {
++            LOGGER.info("RideableMobs initialized with " + mobSettings.size() + " supported mob types");
++        }
++    }
++
++    /**
++     * Initialize the singleton instance.
++     */
++    public static void init(SurvivalCoreConfig config) {
++        if (instance != null) {
++            LOGGER.warning("RideableMobs already initialized");
++            return;
++        }
++        instance = new RideableMobs(config);
++    }
++
++    /**
++     * Get the singleton instance.
++     */
++    public static RideableMobs get() {
++        if (instance == null) {
++            throw new IllegalStateException("RideableMobs not initialized");
++        }
++        return instance;
++    }
++
++    /**
++     * Check if rideable mobs feature is enabled globally.
++     */
++    public boolean isEnabled() {
++        return globalEnabled;
++    }
++
++    /**
++     * Check if a mob type supports riding.
++     */
++    public boolean isRideable(String entityType) {
++        if (!globalEnabled) {
++            return false;
++        }
++        String normalized = entityType.toLowerCase();
++        MobRideSettings settings = mobSettings.get(normalized);
++        return settings != null && settings.enabled();
++    }
++
++    /**
++     * Get ride settings for a specific mob type.
++     */
++    public MobRideSettings getSettings(String entityType) {
++        if (!globalEnabled) {
++            return MobRideSettings.DEFAULT;
++        }
++        String normalized = entityType.toLowerCase();
++        return mobSettings.getOrDefault(normalized, MobRideSettings.DEFAULT);
++    }
++
++    /**
++     * Check if permission is required to ride mobs.
++     */
++    public boolean requiresPermission() {
++        return requirePermission;
++    }
++
++    /**
++     * Calculate movement velocity based on player input and mob settings.
++     *
++     * @param forward forward input (-1 to 1)
++     * @param strafe strafe input (-1 to 1)
++     * @param settings mob ride settings
++     * @return velocity vector [x, y, z]
++     */
++    public double[] calculateMovement(float forward, float strafe, MobRideSettings settings) {
++        double speed = settings.speedMultiplier() * 0.1; // Base movement speed
++
++        // Normalize diagonal movement
++        double length = Math.sqrt(forward * forward + strafe * strafe);
++        if (length > 1.0) {
++            forward /= length;
++            strafe /= length;
++        }
++
++        return new double[] {
++            strafe * speed,
++            0.0, // Y velocity handled separately for jumping
++            forward * speed
++        };
++    }
++
++    /**
++     * Check if a mob type can jump while being ridden.
++     * Some mobs (like chickens, bees) don't have meaningful jump mechanics.
++     */
++    public boolean shouldAllowJump(String entityType) {
++        String normalized = entityType.toLowerCase();
++        // Disable jumping for flying/floating mobs
++        return !normalized.equals("chicken") &&
++               !normalized.equals("bee") &&
++               !normalized.equals("blaze") &&
++               !normalized.equals("dolphin");
++    }
++}

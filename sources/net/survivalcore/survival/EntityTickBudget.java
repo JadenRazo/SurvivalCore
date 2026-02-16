@@ -1,0 +1,125 @@
+package net.survivalcore.survival;
+
+import net.survivalcore.config.SurvivalCoreConfig;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Logger;
+
+/**
+ * Cap entity processing time per tick to prevent lag spikes.
+ *
+ * Uses a rolling round-robin start index for fair entity processing
+ * across ticks. When the budget is exhausted mid-tick, remaining entities
+ * are deferred to the next tick, starting from where processing stopped.
+ *
+ * This prevents scenarios where entities at the end of the list are
+ * starved of processing time.
+ */
+public final class EntityTickBudget {
+
+    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
+    private static EntityTickBudget instance;
+
+    private final boolean enabled;
+    private final long budgetNanos;
+    private final AtomicInteger startIndexCounter = new AtomicInteger(0);
+    private final AtomicInteger deferredCount = new AtomicInteger(0);
+
+    private EntityTickBudget(SurvivalCoreConfig config) {
+        this.enabled = config.entityBudgetsEnabled;
+        this.budgetNanos = config.entityBudgetsMaxEntityTimeMs * 1_000_000L;
+    }
+
+    public static void init() {
+        SurvivalCoreConfig config = SurvivalCoreConfig.get();
+        instance = new EntityTickBudget(config);
+
+        if (instance.enabled) {
+            LOGGER.info("Entity tick budgeting enabled: " + config.entityBudgetsMaxEntityTimeMs + "ms max per tick");
+        } else {
+            LOGGER.info("Entity tick budgeting disabled");
+        }
+    }
+
+    public static EntityTickBudget get() {
+        if (instance == null) {
+            throw new IllegalStateException("EntityTickBudget not initialized");
+        }
+        return instance;
+    }
+
+    public static boolean isEnabled() {
+        return instance != null && instance.enabled;
+    }
+
+    /**
+     * Get the time budget for entity processing this tick in nanoseconds.
+     */
+    public long getBudgetNanos() {
+        return budgetNanos;
+    }
+
+    /**
+     * Check if we have budget remaining for entity processing.
+     *
+     * @param loopStartNanos the nanoTime when entity processing began
+     * @return true if budget remains, false if exhausted
+     */
+    public boolean hasBudgetRemaining(long loopStartNanos) {
+        if (!enabled) return true;
+        return (System.nanoTime() - loopStartNanos) < budgetNanos;
+    }
+
+    /**
+     * Get the start index for entity iteration this tick.
+     * Uses round-robin rotation to ensure fair processing.
+     *
+     * @param listSize the total number of entities
+     * @return the index to start processing from
+     */
+    public int getStartIndex(int listSize) {
+        if (!enabled || listSize <= 0) return 0;
+        return Math.abs(startIndexCounter.get() % listSize);
+    }
+
+    /**
+     * Advance the start index counter for the next tick.
+     * Should be called once per tick after entity processing.
+     */
+    public void advanceStartIndex() {
+        if (enabled) {
+            startIndexCounter.incrementAndGet();
+        }
+    }
+
+    /**
+     * Increment the count of entities deferred this tick due to budget exhaustion.
+     */
+    public void incrementDeferred() {
+        if (enabled) {
+            deferredCount.incrementAndGet();
+        }
+    }
+
+    /**
+     * Get the number of entities deferred this tick, and reset the counter.
+     *
+     * @return count of deferred entities
+     */
+    public int getDeferredCount() {
+        if (!enabled) return 0;
+        return deferredCount.getAndSet(0);
+    }
+
+    /**
+     * Get current stats for monitoring.
+     */
+    public BudgetStats getStats() {
+        return new BudgetStats(
+            budgetNanos / 1_000_000.0,
+            startIndexCounter.get(),
+            deferredCount.get()
+        );
+    }
+
+    public record BudgetStats(double budgetMs, int currentStartIndex, int deferredThisTick) {}
+}

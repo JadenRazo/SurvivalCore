@@ -1,0 +1,143 @@
+--- /dev/null
++++ b/net/survivalcore/api/metrics/PerformanceMetrics.java
+@@ -1,0 +_,140 @@
++package net.survivalcore.api.metrics;
++
++import net.survivalcore.monitoring.PerformanceMonitor;
++import org.bukkit.Bukkit;
++
++/**
++ * Read-only performance metrics access for plugins.
++ *
++ * <p>All data comes from SurvivalCore's internal PerformanceMonitor system.
++ * This class provides a stable API interface without exposing internal
++ * implementation details.
++ */
++public final class PerformanceMetrics {
++
++    /**
++     * Get the average TPS over the last 50 ticks.
++     *
++     * <p>TPS (Ticks Per Second) should ideally be 20.0. Values below 19.0
++     * indicate the server is running behind schedule.
++     *
++     * @return average TPS (0.0 to 20.0)
++     */
++    public double getAverageTps() {
++        // Use Bukkit's built-in TPS calculation
++        return Bukkit.getTPS()[0];
++    }
++
++    /**
++     * Get the average tick time in milliseconds over the last 50 ticks.
++     *
++     * <p>A healthy tick time is under 50ms (allowing for 20 TPS).
++     *
++     * @return average tick time in ms
++     */
++    public double getAverageTickMs() {
++        if (!PerformanceMonitor.isEnabled()) {
++            return 0.0;
++        }
++
++        PerformanceMonitor.TimingSnapshot snapshot = PerformanceMonitor.get()
++            .getSnapshot(PerformanceMonitor.TICK_TOTAL);
++
++        return snapshot.avgMs();
++    }
++
++    /**
++     * Get the total number of entities currently loaded in all worlds.
++     *
++     * @return entity count
++     */
++    public int getEntityCount() {
++        return Bukkit.getWorlds().stream()
++            .mapToInt(world -> world.getEntityCount())
++            .sum();
++    }
++
++    /**
++     * Get the total number of loaded chunks in all worlds.
++     *
++     * @return chunk count
++     */
++    public int getChunkCount() {
++        return Bukkit.getWorlds().stream()
++            .mapToInt(world -> world.getLoadedChunks().length)
++            .sum();
++    }
++
++    /**
++     * Get a timing snapshot for a specific category.
++     *
++     * <p>Common categories:
++     * <ul>
++     *   <li>entities - Entity processing time</li>
++     *   <li>blocks - Block tick time</li>
++     *   <li>chunks - Chunk operation time</li>
++     *   <li>pathfinding - Pathfinding time</li>
++     *   <li>entity-tracking - Entity tracking time</li>
++     *   <li>mob-spawning - Mob spawning time</li>
++     *   <li>redstone - Redstone evaluation time</li>
++     *   <li>tick-total - Total tick time</li>
++     * </ul>
++     *
++     * @param category timing category name
++     * @return timing data, or empty record if category not found
++     */
++    public TimingData getTimingSnapshot(String category) {
++        if (!PerformanceMonitor.isEnabled()) {
++            return TimingData.EMPTY;
++        }
++
++        PerformanceMonitor.TimingSnapshot snapshot = PerformanceMonitor.get()
++            .getSnapshot(category);
++
++        return new TimingData(snapshot.avgMs(), snapshot.maxMs(), snapshot.count());
++    }
++
++    /**
++     * Get the number of lag spikes in the last 5 minutes.
++     *
++     * <p>A lag spike is defined as a tick that took longer than 100ms.
++     *
++     * @return lag spike count
++     */
++    public int getLagSpikeCount() {
++        if (!PerformanceMonitor.isEnabled()) {
++            return 0;
++        }
++
++        return PerformanceMonitor.get().getLagspikes().length;
++    }
++
++    /**
++     * Get a counter value without resetting it.
++     *
++     * <p>Common counters: dab-skipped, budget-deferred, merges-throttled,
++     * tnt-batched, observers-debounced, farm-hotspots, exploits-blocked,
++     * entities-cleaned.
++     *
++     * @param name counter name
++     * @return counter value
++     */
++    public long getCounterValue(String name) {
++        if (!PerformanceMonitor.isEnabled()) {
++            return 0;
++        }
++
++        return PerformanceMonitor.get().getCounter(name);
++    }
++
++    /**
++     * Immutable timing data snapshot.
++     *
++     * @param avgMs average time in milliseconds
++     * @param maxMs maximum time in milliseconds
++     * @param count number of samples
++     */
++    public record TimingData(double avgMs, double maxMs, long count) {
++        public static final TimingData EMPTY = new TimingData(0.0, 0.0, 0);
++    }
++}

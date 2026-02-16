@@ -1,0 +1,66 @@
+--- /dev/null
++++ b/net/survivalcore/qol/CombatTweaks.java
+@@ -1,0 +_,63 @@
++package net.survivalcore.qol;
++
++import net.survivalcore.config.SurvivalCoreConfig;
++
++/**
++ * Combat mechanics customization.
++ *
++ * Controls:
++ * - Attack speed multiplier (1.75 combat update speed adjustable)
++ * - Critical hit damage multiplier
++ * - Sweeping edge damage multiplier
++ * - Shield cooldown after axe hit
++ * - Totem of Undying works from inventory (not just offhand)
++ * - Projectile damage multiplier
++ */
++public final class CombatTweaks {
++
++    private static CombatTweaks instance;
++
++    public final double attackSpeedMultiplier;
++    public final double critDamageMultiplier;
++    public final double sweepDamageMultiplier;
++    public final int shieldCooldownTicks;
++    public final boolean totemFromInventory;
++    public final double projectileDamageMultiplier;
++
++    private CombatTweaks() {
++        SurvivalCoreConfig config = SurvivalCoreConfig.get();
++        this.attackSpeedMultiplier = config.qolCombatAttackSpeedMultiplier;
++        this.critDamageMultiplier = config.qolCombatCritDamageMultiplier;
++        this.sweepDamageMultiplier = config.qolCombatSweepDamageMultiplier;
++        this.shieldCooldownTicks = config.qolCombatShieldCooldownTicks;
++        this.totemFromInventory = config.qolCombatTotemFromInventory;
++        this.projectileDamageMultiplier = config.qolCombatProjectileDamageMultiplier;
++    }
++
++    public static void init() {
++        if (instance == null) {
++            instance = new CombatTweaks();
++        }
++    }
++
++    public static CombatTweaks get() {
++        if (instance == null) {
++            throw new IllegalStateException("CombatTweaks not initialized");
++        }
++        return instance;
++    }
++
++    public double getAdjustedAttackSpeed(double baseSpeed) {
++        return baseSpeed * attackSpeedMultiplier;
++    }
++
++    public double getAdjustedCritDamage(double baseDamage) {
++        return baseDamage * critDamageMultiplier;
++    }
++
++    public boolean shouldTotemActivate(boolean inHand, boolean inInventory) {
++        if (inHand) return true;
++        if (totemFromInventory && inInventory) return true;
++        return false;
++    }
++}

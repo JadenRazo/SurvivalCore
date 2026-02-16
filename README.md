@@ -27,7 +27,7 @@ Requires Java 21 and Git.
 
 ```bash
 # Clone
-git clone https://gitlab.com/JadenRazo/SurvivalCore.git
+git clone https://github.com/JadenRazo/SurvivalCore.git
 cd SurvivalCore
 
 # Apply upstream Paper patches
