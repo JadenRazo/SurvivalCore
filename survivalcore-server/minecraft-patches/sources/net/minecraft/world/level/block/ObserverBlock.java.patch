@@ -1,0 +1,16 @@
+--- a/net/minecraft/world/level/block/ObserverBlock.java
++++ b/net/minecraft/world/level/block/ObserverBlock.java
+@@ -83,4 +_,13 @@
+         if (state.getValue(FACING) == direction && !state.getValue(POWERED)) {
++            // SurvivalCore start - Per-chunk redstone throttling
++            if (level instanceof Level serverLevel && !serverLevel.isClientSide && net.survivalcore.survival.RedstoneThrottler.isEnabled()) {
++                long chunkKey = net.minecraft.world.level.ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
++                net.survivalcore.survival.RedstoneThrottler.get().trackUpdate(chunkKey);
++                if (!net.survivalcore.survival.RedstoneThrottler.get().shouldUpdate(chunkKey, pos.asLong(), serverLevel.getGameTime())) {
++                    return state;
++                }
++            }
++            // SurvivalCore end
+             this.startSignal(level, scheduledTickAccess, pos);
+         }
+ 

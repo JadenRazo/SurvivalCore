@@ -10,3 +10,16 @@
          LOGGER.info("Stopping server");
          Commands.COMMAND_SENDING_POOL.shutdownNow(); // Paper - Perf: Async command map building; Shutdown and don't bother finishing
          // CraftBukkit start
+@@ -1661,4 +_,12 @@
+         ProfilerFiller profilerFiller = Profiler.get();
++        // SurvivalCore start - Per-tick redstone throttle reset and alert check
++        if (net.survivalcore.survival.RedstoneThrottler.isEnabled()) {
++            net.survivalcore.survival.RedstoneThrottler.get().resetCounts();
++            if (this.tickCount % 20 == 0) {
++                net.survivalcore.survival.RedstoneThrottler.get().checkAlerts(this.tickCount);
++            }
++        }
++        // SurvivalCore end
+         this.getPlayerList().getPlayers().forEach(serverPlayer1 -> serverPlayer1.connection.suspendFlushing());
+         this.server.getScheduler().mainThreadHeartbeat(); // CraftBukkit
+         // Paper start - optimise Folia entity scheduler

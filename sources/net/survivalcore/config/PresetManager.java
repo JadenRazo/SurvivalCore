@@ -73,6 +73,7 @@ public final class PresetManager {
         root.node("performance", "tnt-batching", "enabled").set(false);
         root.node("performance", "farm-detection", "enabled").set(false);
         root.node("redstone", "observer-debounce", "enabled").set(false);
+        root.node("redstone", "chunk-throttle", "enabled").set(false);
         root.node("survival", "entity-cleanup", "enabled").set(false);
         // Keep async systems, fast math, hopper optimization
     }
@@ -86,6 +87,10 @@ public final class PresetManager {
         root.node("performance", "farm-detection", "soft-threshold").set(50);
         root.node("performance", "farm-detection", "hard-threshold").set(100);
         root.node("performance", "farm-detection", "critical-threshold").set(200);
+        root.node("redstone", "chunk-throttle", "enabled").set(true);
+        root.node("redstone", "chunk-throttle", "soft-threshold").set(64);
+        root.node("redstone", "chunk-throttle", "hard-threshold").set(150);
+        root.node("redstone", "chunk-throttle", "critical-threshold").set(300);
         root.node("survival", "entity-cleanup", "soft-limit").set(3000);
         root.node("survival", "entity-cleanup", "hard-limit").set(5000);
     }
@@ -99,6 +104,10 @@ public final class PresetManager {
         root.node("performance", "farm-detection", "soft-threshold").set(30);
         root.node("performance", "farm-detection", "hard-threshold").set(60);
         root.node("performance", "farm-detection", "critical-threshold").set(120);
+        root.node("redstone", "chunk-throttle", "enabled").set(true);
+        root.node("redstone", "chunk-throttle", "soft-threshold").set(40);
+        root.node("redstone", "chunk-throttle", "hard-threshold").set(100);
+        root.node("redstone", "chunk-throttle", "critical-threshold").set(200);
         root.node("survival", "entity-cleanup", "soft-limit").set(2000);
         root.node("survival", "entity-cleanup", "hard-limit").set(3500);
         root.node("performance", "item-merge", "cooldown-ticks").set(3);
@@ -112,6 +121,9 @@ public final class PresetManager {
         root.node("performance", "farm-detection", "soft-threshold").set(20);
         root.node("performance", "farm-detection", "hard-threshold").set(40);
         root.node("performance", "farm-detection", "critical-threshold").set(80);
+        root.node("redstone", "chunk-throttle", "soft-threshold").set(24);
+        root.node("redstone", "chunk-throttle", "hard-threshold").set(60);
+        root.node("redstone", "chunk-throttle", "critical-threshold").set(120);
         root.node("survival", "entity-cleanup", "soft-limit").set(1500);
         root.node("survival", "entity-cleanup", "hard-limit").set(2500);
         root.node("async", "entity-tracker", "max-threads").set(1);

@@ -1,0 +1,162 @@
+--- /dev/null
++++ b/net/survivalcore/survival/RedstoneThrottler.java
+@@ -1,0 +_,199 @@
++package net.survivalcore.survival;
++
++import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
++import net.survivalcore.config.SurvivalCoreConfig;
++import net.survivalcore.monitoring.PerformanceMonitor;
++import java.util.HashMap;
++import java.util.Map;
++import java.util.logging.Logger;
++
++/**
++ * Per-chunk redstone update density tracking with tiered throttling.
++ *
++ * Counts redstone updates per chunk per tick and applies a tick divisor
++ * when thresholds are crossed. Uses position hashing for fair staggering
++ * of which updates get skipped.
++ *
++ * Three thresholds (updates per chunk per tick):
++ * - Soft (64): divisor 2 - 50% of updates proceed
++ * - Hard (150): divisor 4 - 25% proceed
++ * - Critical (300): divisor 8 - 12.5% proceed
++ *
++ * Normal gameplay (clocks ~1-4/tick, piston doors ~20-40, sorting systems ~10-30)
++ * stays well below the soft threshold.
++ */
++public final class RedstoneThrottler {
++
++    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
++    private static RedstoneThrottler instance;
++
++    private final boolean enabled;
++    private final int softThreshold;
++    private final int hardThreshold;
++    private final int criticalThreshold;
++    private final boolean alertAdmins;
++
++    private final Long2IntOpenHashMap chunkUpdateCounts = new Long2IntOpenHashMap();
++    private long lastAlertTick = 0;
++
++    private RedstoneThrottler(SurvivalCoreConfig config) {
++        this.enabled = config.redstoneChunkThrottleEnabled;
++        this.softThreshold = config.redstoneChunkThrottleSoft;
++        this.hardThreshold = config.redstoneChunkThrottleHard;
++        this.criticalThreshold = config.redstoneChunkThrottleCritical;
++        this.alertAdmins = config.redstoneChunkThrottleAlertAdmins;
++        this.chunkUpdateCounts.defaultReturnValue(0);
++    }
++
++    public static void init() {
++        SurvivalCoreConfig config = SurvivalCoreConfig.get();
++        instance = new RedstoneThrottler(config);
++
++        if (instance.enabled) {
++            LOGGER.info("Redstone chunk throttle enabled: soft=" + config.redstoneChunkThrottleSoft
++                + ", hard=" + config.redstoneChunkThrottleHard
++                + ", critical=" + config.redstoneChunkThrottleCritical);
++        } else {
++            LOGGER.info("Redstone chunk throttle disabled");
++        }
++    }
++
++    public static RedstoneThrottler get() {
++        if (instance == null) {
++            throw new IllegalStateException("RedstoneThrottler not initialized");
++        }
++        return instance;
++    }
++
++    public static boolean isEnabled() {
++        return instance != null && instance.enabled;
++    }
++
++    public void resetCounts() {
++        if (enabled) {
++            chunkUpdateCounts.clear();
++        }
++    }
++
++    public void trackUpdate(long chunkKey) {
++        if (enabled) {
++            chunkUpdateCounts.addTo(chunkKey, 1);
++        }
++    }
++
++    public boolean shouldUpdate(long chunkKey, long blockPosLong, long currentTick) {
++        if (!enabled) return true;
++
++        int divisor = getTickDivisor(chunkKey);
++        if (divisor == 1) return true;
++
++        long posHash = blockPosLong * 6364136223846793005L + 1442695040888963407L;
++        if ((currentTick + posHash) % divisor != 0) {
++            if (PerformanceMonitor.isEnabled()) {
++                PerformanceMonitor.get().incrementCounter(PerformanceMonitor.REDSTONE_THROTTLED);
++            }
++            return false;
++        }
++        return true;
++    }
++
++    public int getTickDivisor(long chunkKey) {
++        if (!enabled) return 1;
++
++        int count = chunkUpdateCounts.get(chunkKey);
++        if (count >= criticalThreshold) return 8;
++        if (count >= hardThreshold) return 4;
++        if (count >= softThreshold) return 2;
++        return 1;
++    }
++
++    public void checkAlerts(long currentTick) {
++        if (!enabled || !alertAdmins) return;
++
++        if (currentTick - lastAlertTick < 1200) return;
++
++        Map<Long, Integer> hotspots = getHotspots();
++        if (hotspots.isEmpty()) return;
++
++        int criticalCount = 0;
++        int hardCount = 0;
++        int softCount = 0;
++
++        for (int count : hotspots.values()) {
++            if (count >= criticalThreshold) criticalCount++;
++            else if (count >= hardThreshold) hardCount++;
++            else softCount++;
++        }
++
++        if (criticalCount > 0 || hardCount > 0) {
++            LOGGER.warning(String.format(
++                "Redstone hotspots detected: %d critical, %d hard, %d soft (total %d chunks)",
++                criticalCount, hardCount, softCount, hotspots.size()
++            ));
++            lastAlertTick = currentTick;
++        }
++    }
++
++    public Map<Long, Integer> getHotspots() {
++        if (!enabled) return Map.of();
++
++        Map<Long, Integer> hotspots = new HashMap<>();
++        chunkUpdateCounts.forEach((chunkKey, count) -> {
++            if (count >= softThreshold) {
++                hotspots.put(chunkKey, count);
++            }
++        });
++        return hotspots;
++    }
++
++    public ChunkStats getChunkStats(long chunkKey) {
++        if (!enabled) return ChunkStats.NONE;
++        int count = chunkUpdateCounts.get(chunkKey);
++        int divisor = getTickDivisor(chunkKey);
++        return new ChunkStats(count, divisor);
++    }
++
++    public record ChunkStats(int updateCount, int tickDivisor) {
++        public static final ChunkStats NONE = new ChunkStats(0, 1);
++    }
++}

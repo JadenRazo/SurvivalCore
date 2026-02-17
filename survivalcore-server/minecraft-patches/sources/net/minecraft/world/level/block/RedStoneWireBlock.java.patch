@@ -1,0 +1,17 @@
+--- a/net/minecraft/world/level/block/RedStoneWireBlock.java
++++ b/net/minecraft/world/level/block/RedStoneWireBlock.java
+@@ -400,5 +_,14 @@
+     protected void neighborChanged(BlockState state, Level level, BlockPos pos, Block neighborBlock, @Nullable Orientation orientation, boolean movedByPiston) {
+         if (!level.isClientSide) {
++            // SurvivalCore start - Per-chunk redstone throttling
++            if (net.survivalcore.survival.RedstoneThrottler.isEnabled()) {
++                long chunkKey = net.minecraft.world.level.ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
++                net.survivalcore.survival.RedstoneThrottler.get().trackUpdate(chunkKey);
++                if (!net.survivalcore.survival.RedstoneThrottler.get().shouldUpdate(chunkKey, pos.asLong(), level.getGameTime())) {
++                    return;
++                }
++            }
++            // SurvivalCore end
+             // Paper start - optimize redstone (Alternate Current)
+             // Alternate Current handles breaking of redstone wires in the WireHandler.
+             if (level.paperConfig().misc.redstoneImplementation == io.papermc.paper.configuration.WorldConfiguration.Misc.RedstoneImplementation.ALTERNATE_CURRENT) {

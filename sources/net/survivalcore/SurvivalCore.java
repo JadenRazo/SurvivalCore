@@ -14,6 +14,7 @@ import net.survivalcore.survival.EntityCleanup;
 import net.survivalcore.survival.EntityTickBudget;
 import net.survivalcore.survival.FarmDetector;
 import net.survivalcore.survival.ObserverDebounce;
+import net.survivalcore.survival.RedstoneThrottler;
 import net.survivalcore.survival.TNTBatcher;
 import net.survivalcore.survival.TickCoalescer;
 
@@ -65,6 +66,7 @@ public final class SurvivalCore {
         EntityTickBudget.init();
         FarmDetector.init();
         ObserverDebounce.init();
+        RedstoneThrottler.init();
         TNTBatcher.init();
         TickCoalescer.init();
         EntityCleanup.init();
@@ -103,6 +105,7 @@ public final class SurvivalCore {
         LOGGER.info("=== Redstone ===");
         LOGGER.info("  Implementation: " + config.redstoneImplementation);
         LOGGER.info("  Observer debounce: " + (config.observerDebounceEnabled ? "ON (" + config.observerDebounceMinIntervalTicks + " tick min)" : "OFF"));
+        LOGGER.info("  Chunk throttle: " + (config.redstoneChunkThrottleEnabled ? "ON (soft: " + config.redstoneChunkThrottleSoft + ", hard: " + config.redstoneChunkThrottleHard + ", critical: " + config.redstoneChunkThrottleCritical + ")" : "OFF"));
 
         LOGGER.info("=== Survival ===");
         LOGGER.info("  Entity cleanup: " + (config.entityCleanupEnabled ? "ON (soft: " + config.entityCleanupSoftLimit + ", hard: " + config.entityCleanupHardLimit + ")" : "OFF"));
@@ -148,6 +151,7 @@ public final class SurvivalCore {
         EntityTickBudget.init();
         FarmDetector.init();
         ObserverDebounce.init();
+        RedstoneThrottler.init();
         TNTBatcher.init();
         TickCoalescer.init();
         EntityCleanup.init();

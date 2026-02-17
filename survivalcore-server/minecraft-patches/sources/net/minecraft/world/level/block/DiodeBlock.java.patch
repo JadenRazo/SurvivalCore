@@ -1,0 +1,16 @@
+--- a/net/minecraft/world/level/block/DiodeBlock.java
++++ b/net/minecraft/world/level/block/DiodeBlock.java
+@@ -94,4 +_,12 @@
+     protected void neighborChanged(BlockState state, Level level, BlockPos pos, Block neighborBlock, @Nullable Orientation orientation, boolean movedByPiston) {
++        // SurvivalCore start - Per-chunk redstone throttling
++        if (!level.isClientSide && net.survivalcore.survival.RedstoneThrottler.isEnabled()) {
++            long chunkKey = net.minecraft.world.level.ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
++            net.survivalcore.survival.RedstoneThrottler.get().trackUpdate(chunkKey);
++            if (!net.survivalcore.survival.RedstoneThrottler.get().shouldUpdate(chunkKey, pos.asLong(), level.getGameTime())) {
++                return;
++            }
++        }
++        // SurvivalCore end
+         if (state.canSurvive(level, pos)) {
+             this.checkTickOnNeighbor(level, pos, state);
+         } else {

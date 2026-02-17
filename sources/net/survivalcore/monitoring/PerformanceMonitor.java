@@ -45,6 +45,7 @@ public final class PerformanceMonitor {
     public static final String TNT_BATCHED = "tnt-batched";
     public static final String OBSERVERS_DEBOUNCED = "observers-debounced";
     public static final String FARM_HOTSPOTS = "farm-hotspots";
+    public static final String REDSTONE_THROTTLED = "redstone-throttled";
     public static final String EXPLOITS_BLOCKED = "exploits-blocked";
     public static final String ENTITIES_CLEANED = "entities-cleaned";
 
@@ -71,6 +72,7 @@ public final class PerformanceMonitor {
         counters.put(TNT_BATCHED, new AtomicLong(0));
         counters.put(OBSERVERS_DEBOUNCED, new AtomicLong(0));
         counters.put(FARM_HOTSPOTS, new AtomicLong(0));
+        counters.put(REDSTONE_THROTTLED, new AtomicLong(0));
         counters.put(EXPLOITS_BLOCKED, new AtomicLong(0));
         counters.put(ENTITIES_CLEANED, new AtomicLong(0));
     }
@@ -194,6 +196,7 @@ public final class PerformanceMonitor {
         long tntBatched = getAndResetCounter(TNT_BATCHED);
         long observersDebounced = getAndResetCounter(OBSERVERS_DEBOUNCED);
         long farmHotspots = getAndResetCounter(FARM_HOTSPOTS);
+        long redstoneThrottled = getAndResetCounter(REDSTONE_THROTTLED);
         long exploitsBlocked = getAndResetCounter(EXPLOITS_BLOCKED);
         long entitiesCleaned = getAndResetCounter(ENTITIES_CLEANED);
 
@@ -203,6 +206,7 @@ public final class PerformanceMonitor {
         if (tntBatched > 0) report.append(String.format("  TNT explosions batched: %d\n", tntBatched));
         if (observersDebounced > 0) report.append(String.format("  Observers debounced: %d\n", observersDebounced));
         if (farmHotspots > 0) report.append(String.format("  Farm hotspots detected: %d\n", farmHotspots));
+        if (redstoneThrottled > 0) report.append(String.format("  Redstone updates throttled: %d\n", redstoneThrottled));
         if (exploitsBlocked > 0) report.append(String.format("  Exploits blocked: %d\n", exploitsBlocked));
         if (entitiesCleaned > 0) report.append(String.format("  Entities cleaned up: %d\n", entitiesCleaned));
 

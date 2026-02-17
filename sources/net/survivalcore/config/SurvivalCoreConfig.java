@@ -90,6 +90,13 @@ public final class SurvivalCoreConfig {
     public final boolean observerDebounceEnabled;
     public final int observerDebounceMinIntervalTicks;
 
+    // ── Redstone: Chunk Throttle ──────────────────────────
+    public final boolean redstoneChunkThrottleEnabled;
+    public final int redstoneChunkThrottleSoft;
+    public final int redstoneChunkThrottleHard;
+    public final int redstoneChunkThrottleCritical;
+    public final boolean redstoneChunkThrottleAlertAdmins;
+
     // ── Survival: Entity Cleanup ──────────────────────────
     public final boolean entityCleanupEnabled;
     public final int entityCleanupSoftLimit;
@@ -222,6 +229,14 @@ public final class SurvivalCoreConfig {
         CommentedConfigurationNode observer = root.node("redstone", "observer-debounce");
         this.observerDebounceEnabled = observer.node("enabled").getBoolean(true);
         this.observerDebounceMinIntervalTicks = observer.node("min-interval-ticks").getInt(4);
+
+        // Chunk throttle
+        CommentedConfigurationNode chunkThrottle = root.node("redstone", "chunk-throttle");
+        this.redstoneChunkThrottleEnabled = chunkThrottle.node("enabled").getBoolean(true);
+        this.redstoneChunkThrottleSoft = chunkThrottle.node("soft-threshold").getInt(64);
+        this.redstoneChunkThrottleHard = chunkThrottle.node("hard-threshold").getInt(150);
+        this.redstoneChunkThrottleCritical = chunkThrottle.node("critical-threshold").getInt(300);
+        this.redstoneChunkThrottleAlertAdmins = chunkThrottle.node("alert-admins").getBoolean(true);
 
         // Entity cleanup
         CommentedConfigurationNode cleanup = root.node("survival", "entity-cleanup");
@@ -431,6 +446,15 @@ public final class SurvivalCoreConfig {
         observer.comment("Debounce rapid observer updates to prevent lag machines.");
         setDefault(observer.node("enabled"), true, null);
         setDefault(observer.node("min-interval-ticks"), 4, "Minimum ticks between observer activations");
+
+        // Chunk throttle
+        CommentedConfigurationNode chunkThrottle = redstone.node("chunk-throttle");
+        chunkThrottle.comment("Throttle redstone updates per chunk based on update density.\nPrevents lag machines from tanking server TPS.");
+        setDefault(chunkThrottle.node("enabled"), true, null);
+        setDefault(chunkThrottle.node("soft-threshold"), 64, "Updates/tick to start throttling (divisor 2)");
+        setDefault(chunkThrottle.node("hard-threshold"), 150, "Heavy throttling threshold (divisor 4)");
+        setDefault(chunkThrottle.node("critical-threshold"), 300, "Emergency throttling threshold (divisor 8)");
+        setDefault(chunkThrottle.node("alert-admins"), true, "Log warnings when chunks hit hard/critical thresholds");
 
         // Survival: Entity cleanup
         CommentedConfigurationNode survival = root.node("survival");
