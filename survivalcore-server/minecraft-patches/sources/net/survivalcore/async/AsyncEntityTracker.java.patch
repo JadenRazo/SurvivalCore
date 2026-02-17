@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/async/AsyncEntityTracker.java
-@@ -1,0 +_,184 @@
+@@ -1,0 +_,190 @@
 +package net.survivalcore.async;
 +
 +import java.util.concurrent.ConcurrentHashMap;
@@ -28,6 +28,7 @@
 +
 +    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
 +    private static volatile AsyncEntityTracker instance;
++    private static final int CACHE_HARD_LIMIT = 5000;
 +    private final ExecutorService executor;
 +    private final boolean compatMode;
 +    private final ConcurrentHashMap<Integer, Boolean> syncTrackingCache = new ConcurrentHashMap<>();
@@ -160,11 +161,15 @@
 +
 +        // Cleanup every 6000 ticks (5 minutes)
 +        if (currentTick - lastCacheCleanup > 6000) {
-+            // Clear entries for entities that no longer exist
-+            // In practice, unmarkSyncTracking should be called on entity removal,
-+            // but this provides a safety net against leaks
-+            if (syncTrackingCache.size() > 1000) {
-+                LOGGER.warning("AsyncEntityTracker cache is large (" + syncTrackingCache.size()
++            int cacheSize = syncTrackingCache.size();
++
++            // Safety valve: force-clear if cache exceeds hard limit
++            if (cacheSize > CACHE_HARD_LIMIT) {
++                LOGGER.warning("AsyncEntityTracker cache exceeded " + CACHE_HARD_LIMIT
++                    + " entries (" + cacheSize + "), force-clearing to prevent memory leak");
++                syncTrackingCache.clear();
++            } else if (cacheSize > 1000) {
++                LOGGER.warning("AsyncEntityTracker cache is large (" + cacheSize
 +                    + " entries). Consider calling unmarkSyncTracking on entity removal.");
 +            }
 +            lastCacheCleanup = currentTick;

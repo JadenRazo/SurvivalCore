@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/survival/ObserverDebounce.java
-@@ -1,0 +_,116 @@
+@@ -1,0 +_,128 @@
 +package net.survivalcore.survival;
 +
 +import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
@@ -20,13 +20,14 @@
 +public final class ObserverDebounce {
 +
 +    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
-+    private static ObserverDebounce instance;
++    private static volatile ObserverDebounce instance;
++    private static final int MAX_TRACKED_OBSERVERS = 10000;
 +
 +    private final boolean enabled;
 +    private final int minIntervalTicks;
 +    private final Long2LongOpenHashMap lastTriggerTick = new Long2LongOpenHashMap();
 +    private final AtomicInteger debouncedCount = new AtomicInteger(0);
-+    private long lastCleanupTick = 0;
++    private volatile long lastCleanupTick = 0;
 +
 +    private ObserverDebounce(SurvivalCoreConfig config) {
 +        this.enabled = config.observerDebounceEnabled;
@@ -66,32 +67,43 @@
 +    public boolean shouldFire(long blockPosLong, long currentTick) {
 +        if (!enabled) return true;
 +
-+        long lastTick = lastTriggerTick.get(blockPosLong);
-+        if (currentTick - lastTick < minIntervalTicks) {
-+            debouncedCount.incrementAndGet();
-+            return false;
-+        }
++        synchronized (this) {
++            long lastTick = lastTriggerTick.get(blockPosLong);
++            if (currentTick - lastTick < minIntervalTicks) {
++                debouncedCount.incrementAndGet();
++                return false;
++            }
 +
-+        lastTriggerTick.put(blockPosLong, currentTick);
++            lastTriggerTick.put(blockPosLong, currentTick);
++        }
 +        return true;
 +    }
 +
 +    /**
 +     * Periodic cleanup of stale entries to prevent unbounded growth.
-+     * Should be called approximately every ~1200 ticks (1 minute).
++     * Should be called approximately every ~600 ticks (30 seconds).
 +     *
 +     * @param currentTick current server tick
 +     */
 +    public void cleanup(long currentTick) {
 +        if (!enabled) return;
 +
-+        // Cleanup every 1200 ticks
-+        if (currentTick - lastCleanupTick < 1200) return;
++        // Cleanup every 600 ticks (30 seconds)
++        if (currentTick - lastCleanupTick < 600) return;
 +        lastCleanupTick = currentTick;
 +
-+        // Remove entries older than 10 seconds (200 ticks)
-+        long staleThreshold = currentTick - 200;
-+        lastTriggerTick.long2LongEntrySet().removeIf(entry -> entry.getLongValue() < staleThreshold);
++        synchronized (this) {
++            // Safety valve: if map has grown too large, clear entirely
++            if (lastTriggerTick.size() > MAX_TRACKED_OBSERVERS) {
++                LOGGER.warning("Observer debounce map exceeded " + MAX_TRACKED_OBSERVERS + " entries, clearing entirely");
++                lastTriggerTick.clear();
++                return;
++            }
++
++            // Remove entries older than 10 seconds (200 ticks)
++            long staleThreshold = currentTick - 200;
++            lastTriggerTick.long2LongEntrySet().removeIf(entry -> entry.getLongValue() < staleThreshold);
++        }
 +    }
 +
 +    /**
@@ -108,11 +120,13 @@
 +     * Get current stats for monitoring.
 +     */
 +    public DebounceStats getStats() {
-+        return new DebounceStats(
-+            lastTriggerTick.size(),
-+            minIntervalTicks,
-+            debouncedCount.get()
-+        );
++        synchronized (this) {
++            return new DebounceStats(
++                lastTriggerTick.size(),
++                minIntervalTicks,
++                debouncedCount.get()
++            );
++        }
 +    }
 +
 +    public record DebounceStats(int trackedObservers, int minIntervalTicks, int debouncedThisTick) {}

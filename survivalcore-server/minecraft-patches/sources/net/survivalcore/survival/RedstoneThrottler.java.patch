@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/survival/RedstoneThrottler.java
-@@ -1,0 +_,199 @@
+@@ -1,0 +_,213 @@
 +package net.survivalcore.survival;
 +
 +import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
@@ -28,7 +28,7 @@
 +public final class RedstoneThrottler {
 +
 +    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
-+    private static RedstoneThrottler instance;
++    private static volatile RedstoneThrottler instance;
 +
 +    private final boolean enabled;
 +    private final int softThreshold;
@@ -74,20 +74,32 @@
 +
 +    public void resetCounts() {
 +        if (enabled) {
-+            chunkUpdateCounts.clear();
++            synchronized (this) {
++                chunkUpdateCounts.clear();
++            }
 +        }
 +    }
 +
 +    public void trackUpdate(long chunkKey) {
 +        if (enabled) {
-+            chunkUpdateCounts.addTo(chunkKey, 1);
++            synchronized (this) {
++                chunkUpdateCounts.addTo(chunkKey, 1);
++            }
 +        }
 +    }
 +
 +    public boolean shouldUpdate(long chunkKey, long blockPosLong, long currentTick) {
 +        if (!enabled) return true;
 +
-+        int divisor = getTickDivisor(chunkKey);
++        // Inline divisor lookup to avoid double map access on the hot path
++        int divisor;
++        synchronized (this) {
++            int count = chunkUpdateCounts.get(chunkKey);
++            if (count >= criticalThreshold) divisor = 8;
++            else if (count >= hardThreshold) divisor = 4;
++            else if (count >= softThreshold) divisor = 2;
++            else divisor = 1;
++        }
 +        if (divisor == 1) return true;
 +
 +        long posHash = blockPosLong * 6364136223846793005L + 1442695040888963407L;
@@ -103,11 +115,13 @@
 +    public int getTickDivisor(long chunkKey) {
 +        if (!enabled) return 1;
 +
-+        int count = chunkUpdateCounts.get(chunkKey);
-+        if (count >= criticalThreshold) return 8;
-+        if (count >= hardThreshold) return 4;
-+        if (count >= softThreshold) return 2;
-+        return 1;
++        synchronized (this) {
++            int count = chunkUpdateCounts.get(chunkKey);
++            if (count >= criticalThreshold) return 8;
++            if (count >= hardThreshold) return 4;
++            if (count >= softThreshold) return 2;
++            return 1;
++        }
 +    }
 +
 +    public void checkAlerts(long currentTick) {
@@ -141,19 +155,27 @@
 +        if (!enabled) return Map.of();
 +
 +        Map<Long, Integer> hotspots = new HashMap<>();
-+        chunkUpdateCounts.forEach((chunkKey, count) -> {
-+            if (count >= softThreshold) {
-+                hotspots.put(chunkKey, count);
-+            }
-+        });
++        synchronized (this) {
++            chunkUpdateCounts.forEach((chunkKey, count) -> {
++                if (count >= softThreshold) {
++                    hotspots.put(chunkKey, count);
++                }
++            });
++        }
 +        return hotspots;
 +    }
 +
 +    public ChunkStats getChunkStats(long chunkKey) {
 +        if (!enabled) return ChunkStats.NONE;
-+        int count = chunkUpdateCounts.get(chunkKey);
-+        int divisor = getTickDivisor(chunkKey);
-+        return new ChunkStats(count, divisor);
++        synchronized (this) {
++            int count = chunkUpdateCounts.get(chunkKey);
++            int divisor;
++            if (count >= criticalThreshold) divisor = 8;
++            else if (count >= hardThreshold) divisor = 4;
++            else if (count >= softThreshold) divisor = 2;
++            else divisor = 1;
++            return new ChunkStats(count, divisor);
++        }
 +    }
 +
 +    public record ChunkStats(int updateCount, int tickDivisor) {

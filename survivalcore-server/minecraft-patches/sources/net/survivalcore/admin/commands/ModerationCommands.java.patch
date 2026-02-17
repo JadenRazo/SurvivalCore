@@ -50,7 +50,7 @@
 +                    vanishing = false;
 +                    // Show to all players
 +                    for (final Player online : Bukkit.getOnlinePlayers()) {
-+                        online.showPlayer(Bukkit.getPluginManager().getPlugins()[0], target);
++                        online.showPlayer(AdminCommands.getPluginRef(), target);
 +                    }
 +                } else {
 +                    AdminCommands.getVanishedPlayers().add(uuid);
@@ -58,7 +58,7 @@
 +                    // Hide from all non-vanish-permission players
 +                    for (final Player online : Bukkit.getOnlinePlayers()) {
 +                        if (!online.hasPermission(PermissionNodes.VANISH) && !online.equals(target)) {
-+                            online.hidePlayer(Bukkit.getPluginManager().getPlugins()[0], target);
++                            online.hidePlayer(AdminCommands.getPluginRef(), target);
 +                        }
 +                    }
 +                }

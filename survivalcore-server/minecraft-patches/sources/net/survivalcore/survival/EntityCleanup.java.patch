@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/survival/EntityCleanup.java
-@@ -1,0 +_,245 @@
+@@ -1,0 +_,262 @@
 +package net.survivalcore.survival;
 +
 +import net.survivalcore.config.SurvivalCoreConfig;
@@ -22,6 +22,28 @@
 +
 +    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
 +    private static EntityCleanup instance;
++
++    // Cached reflection fields for age acceleration (initialized once)
++    private static java.lang.reflect.Field ITEM_AGE_FIELD;
++    private static java.lang.reflect.Field XP_AGE_FIELD;
++    private static boolean reflectionWarningLogged = false;
++
++    static {
++        try {
++            ITEM_AGE_FIELD = net.minecraft.world.entity.item.ItemEntity.class.getDeclaredField("age");
++            ITEM_AGE_FIELD.setAccessible(true);
++        } catch (NoSuchFieldException e) {
++            LOGGER.warning("EntityCleanup: Could not find ItemEntity.age field - item despawn acceleration will be unavailable");
++            ITEM_AGE_FIELD = null;
++        }
++        try {
++            XP_AGE_FIELD = net.minecraft.world.entity.ExperienceOrb.class.getDeclaredField("age");
++            XP_AGE_FIELD.setAccessible(true);
++        } catch (NoSuchFieldException e) {
++            LOGGER.warning("EntityCleanup: Could not find ExperienceOrb.age field - XP despawn acceleration will be unavailable");
++            XP_AGE_FIELD = null;
++        }
++    }
 +
 +    // Protected entity types (never cleaned up)
 +    private static final Set<String> PROTECTED_TYPES = Set.of(
@@ -176,24 +198,25 @@
 +                if (!shouldAccelerateDespawn(className)) continue;
 +
 +                if (entity instanceof net.minecraft.world.entity.item.ItemEntity item) {
-+                    // Set age to near-despawn (5900/6000 default)
-+                    try {
-+                        java.lang.reflect.Field ageField = net.minecraft.world.entity.item.ItemEntity.class.getDeclaredField("age");
-+                        ageField.setAccessible(true);
-+                        ageField.setInt(item, 5900);
-+                    } catch (ReflectiveOperationException e) {
-+                        // Fallback: discard the entity if reflection fails
-+                        item.discard();
++                    if (ITEM_AGE_FIELD != null) {
++                        try {
++                            ITEM_AGE_FIELD.setInt(item, 5900);
++                        } catch (ReflectiveOperationException e) {
++                            logReflectionWarning("ItemEntity.age");
++                        }
++                    } else {
++                        logReflectionWarning("ItemEntity.age");
 +                    }
 +                    cleanedCount++;
 +                } else if (entity instanceof net.minecraft.world.entity.ExperienceOrb xp) {
-+                    // Accelerate XP despawn by setting age high
-+                    try {
-+                        java.lang.reflect.Field ageField = net.minecraft.world.entity.ExperienceOrb.class.getDeclaredField("age");
-+                        ageField.setAccessible(true);
-+                        ageField.setInt(xp, 5900);
-+                    } catch (ReflectiveOperationException e) {
-+                        xp.discard();
++                    if (XP_AGE_FIELD != null) {
++                        try {
++                            XP_AGE_FIELD.setInt(xp, 5900);
++                        } catch (ReflectiveOperationException e) {
++                            logReflectionWarning("ExperienceOrb.age");
++                        }
++                    } else {
++                        logReflectionWarning("ExperienceOrb.age");
 +                    }
 +                    cleanedCount++;
 +                }
@@ -210,11 +233,22 @@
 +        return cleanedCount;
 +    }
 +
++    private static void logReflectionWarning(String fieldName) {
++        if (!reflectionWarningLogged) {
++            LOGGER.warning("EntityCleanup: Failed to access " + fieldName + " - skipping despawn acceleration (entity not discarded)");
++            reflectionWarningLogged = true;
++        }
++    }
++
 +    /**
 +     * Get current stats for monitoring.
 +     */
 +    public CleanupStats getStats(int currentEntityCount) {
 +        CleanupAction action = getAction(currentEntityCount);
++        // Guard against division by zero
++        if (softLimit <= 0 || hardLimit <= 0) {
++            return new CleanupStats(currentEntityCount, softLimit, hardLimit, action, 0.0, 0.0);
++        }
 +        double softPercent = (currentEntityCount * 100.0) / softLimit;
 +        double hardPercent = (currentEntityCount * 100.0) / hardLimit;
 +

@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/admin/AdminCommands.java
-@@ -1,0 +_,290 @@
+@@ -1,0 +_,305 @@
 +package net.survivalcore.admin;
 +
 +import java.util.ArrayList;
@@ -30,12 +30,18 @@
 +import org.bukkit.event.player.PlayerTeleportEvent;
 +import org.bukkit.permissions.Permission;
 +import org.bukkit.permissions.PermissionDefault;
++import org.bukkit.plugin.Plugin;
 +import org.bukkit.plugin.PluginManager;
 +
 +/**
 + * Bulk registration for all admin QoL commands and their event listeners.
 + */
 +public final class AdminCommands implements Listener {
++
++    private static final java.util.logging.Logger LOGGER = java.util.logging.Logger.getLogger("SurvivalCore");
++
++    // Plugin reference for Bukkit API calls that require a Plugin instance
++    private static Plugin pluginRef;
 +
 +    // Existing state
 +    private static final Map<UUID, Location> BACK_LOCATIONS = new ConcurrentHashMap<>();
@@ -77,6 +83,12 @@
 +    public static Map<UUID, String> getLastSeenNames() { return LAST_SEEN_NAMES; }
 +
 +    /**
++     * Get the plugin reference used for Bukkit API calls.
++     * May be null if no plugins are loaded yet.
++     */
++    public static Plugin getPluginRef() { return pluginRef; }
++
++    /**
 +     * Check if a player is currently muted.
 +     */
 +    public static boolean isMuted(final UUID uuid) {
@@ -88,6 +100,19 @@
 +            return false;
 +        }
 +        return true;
++    }
++
++    /**
++     * Resolve a plugin reference for Bukkit API calls.
++     * Uses the first available loaded plugin.
++     */
++    private static Plugin resolvePluginRef() {
++        Plugin[] plugins = Bukkit.getPluginManager().getPlugins();
++        if (plugins.length == 0) {
++            LOGGER.warning("AdminCommands: No plugins loaded - event listeners and scheduled tasks will not be registered");
++            return null;
++        }
++        return plugins[0];
 +    }
 +
 +    /**
@@ -117,14 +142,19 @@
 +        // Register plugin manager command
 +        commandMap.register("survivalcore", new net.survivalcore.admin.commands.PluginManagerCommand("plugman"));
 +
-+        // Register event listeners via Bukkit
-+        final AdminCommands listener = new AdminCommands();
-+        Bukkit.getScheduler().scheduleSyncDelayedTask(
-+            Bukkit.getPluginManager().getPlugins()[0],
-+            () -> Bukkit.getPluginManager().registerEvents(listener, Bukkit.getPluginManager().getPlugins()[0])
-+        );
++        // Resolve plugin reference for Bukkit API calls
++        pluginRef = resolvePluginRef();
 +
-+        java.util.logging.Logger.getLogger("SurvivalCore").info("Registered " + count + " admin commands");
++        // Register event listeners via Bukkit
++        if (pluginRef != null) {
++            final AdminCommands listener = new AdminCommands();
++            Bukkit.getScheduler().scheduleSyncDelayedTask(
++                pluginRef,
++                () -> Bukkit.getPluginManager().registerEvents(listener, pluginRef)
++            );
++        }
++
++        LOGGER.info("Registered " + count + " admin commands");
 +    }
 +
 +    private static void registerPermissions() {
@@ -264,10 +294,12 @@
 +        JOIN_TIMES.put(uuid, System.currentTimeMillis());
 +
 +        // Hide vanished players from the joining player
-+        for (final UUID vanishedId : VANISHED_PLAYERS) {
-+            final Player vanished = Bukkit.getPlayer(vanishedId);
-+            if (vanished != null && vanished.isOnline()) {
-+                player.hidePlayer(Bukkit.getPluginManager().getPlugins()[0], vanished);
++        if (pluginRef != null) {
++            for (final UUID vanishedId : VANISHED_PLAYERS) {
++                final Player vanished = Bukkit.getPlayer(vanishedId);
++                if (vanished != null && vanished.isOnline()) {
++                    player.hidePlayer(pluginRef, vanished);
++                }
 +            }
 +        }
 +    }

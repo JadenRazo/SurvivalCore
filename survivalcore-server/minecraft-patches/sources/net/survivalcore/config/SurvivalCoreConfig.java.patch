@@ -109,9 +109,9 @@
 +
 +    // ── Redstone: Chunk Throttle ──────────────────────────
 +    public final boolean redstoneChunkThrottleEnabled;
-+    public final int redstoneChunkThrottleSoft;
-+    public final int redstoneChunkThrottleHard;
-+    public final int redstoneChunkThrottleCritical;
++    public int redstoneChunkThrottleSoft;
++    public int redstoneChunkThrottleHard;
++    public int redstoneChunkThrottleCritical;
 +    public final boolean redstoneChunkThrottleAlertAdmins;
 +
 +    // ── Survival: Entity Cleanup ──────────────────────────
@@ -600,6 +600,18 @@
 +
 +        // Observer debounce (must be positive)
 +        this.observerDebounceMinIntervalTicks = ConfigValidator.ensurePositive("redstone.observer-debounce.min-interval-ticks", this.observerDebounceMinIntervalTicks);
++
++        // Redstone chunk throttle thresholds (must be positive and in order: soft < hard < critical)
++        this.redstoneChunkThrottleSoft = ConfigValidator.ensurePositive("redstone.chunk-throttle.soft-threshold", this.redstoneChunkThrottleSoft);
++        this.redstoneChunkThrottleHard = ConfigValidator.ensurePositive("redstone.chunk-throttle.hard-threshold", this.redstoneChunkThrottleHard);
++        this.redstoneChunkThrottleCritical = ConfigValidator.ensurePositive("redstone.chunk-throttle.critical-threshold", this.redstoneChunkThrottleCritical);
++        ConfigValidator.validateThreeTierThresholds(
++            "redstone chunk throttle",
++            this.redstoneChunkThrottleSoft, this.redstoneChunkThrottleHard, this.redstoneChunkThrottleCritical,
++            "redstone.chunk-throttle.soft-threshold",
++            "redstone.chunk-throttle.hard-threshold",
++            "redstone.chunk-throttle.critical-threshold"
++        );
 +
 +        // Entity cleanup limits (must be positive and in order: soft < hard)
 +        this.entityCleanupSoftLimit = ConfigValidator.ensurePositive("survival.entity-cleanup.soft-limit", this.entityCleanupSoftLimit);

@@ -1,11 +1,12 @@
 --- /dev/null
 +++ b/net/survivalcore/survival/TNTBatcher.java
-@@ -1,0 +_,164 @@
+@@ -1,0 +_,166 @@
 +package net.survivalcore.survival;
 +
 +import net.survivalcore.config.SurvivalCoreConfig;
 +import java.util.ArrayList;
 +import java.util.List;
++import java.util.concurrent.ConcurrentLinkedQueue;
 +import java.util.concurrent.atomic.AtomicInteger;
 +import java.util.logging.Logger;
 +
@@ -27,7 +28,7 @@
 +
 +    private final boolean enabled;
 +    private final double groupRadiusSq;
-+    private final List<PendingDetonation> queue = new ArrayList<>(64);
++    private final ConcurrentLinkedQueue<PendingDetonation> queue = new ConcurrentLinkedQueue<>();
 +    private final AtomicInteger batchedCount = new AtomicInteger(0);
 +
 +    private TNTBatcher(SurvivalCoreConfig config) {
@@ -77,13 +78,16 @@
 +     * @param explosionCallback callback to execute actual explosion
 +     */
 +    public void processBatch(ExplosionCallback explosionCallback) {
-+        if (!enabled || queue.isEmpty()) {
-+            queue.clear();
-+            return;
++        if (!enabled) return;
++
++        // Drain queue into local list for processing
++        List<PendingDetonation> remaining = new ArrayList<>();
++        PendingDetonation p;
++        while ((p = queue.poll()) != null) {
++            remaining.add(p);
 +        }
 +
-+        List<PendingDetonation> remaining = new ArrayList<>(queue);
-+        queue.clear();
++        if (remaining.isEmpty()) return;
 +
 +        while (!remaining.isEmpty()) {
 +            PendingDetonation current = remaining.remove(0);
