@@ -1,0 +1,12 @@
+--- a/net/minecraft/server/MinecraftServer.java
++++ b/net/minecraft/server/MinecraftServer.java
+@@ -994,6 +_,9 @@
+             this.cancelRecordingMetrics();
+         }
+ 
++        // SurvivalCore start - Shutdown optimization systems
++        net.survivalcore.SurvivalCore.shutdown();
++        // SurvivalCore end
+         LOGGER.info("Stopping server");
+         Commands.COMMAND_SENDING_POOL.shutdownNow(); // Paper - Perf: Async command map building; Shutdown and don't bother finishing
+         // CraftBukkit start

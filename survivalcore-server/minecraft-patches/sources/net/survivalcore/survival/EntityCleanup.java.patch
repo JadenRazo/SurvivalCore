@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/survival/EntityCleanup.java
-@@ -1,0 +_,232 @@
+@@ -1,0 +_,245 @@
 +package net.survivalcore.survival;
 +
 +import net.survivalcore.config.SurvivalCoreConfig;
@@ -177,11 +177,24 @@
 +
 +                if (entity instanceof net.minecraft.world.entity.item.ItemEntity item) {
 +                    // Set age to near-despawn (5900/6000 default)
-+                    item.setAge(5900);
++                    try {
++                        java.lang.reflect.Field ageField = net.minecraft.world.entity.item.ItemEntity.class.getDeclaredField("age");
++                        ageField.setAccessible(true);
++                        ageField.setInt(item, 5900);
++                    } catch (ReflectiveOperationException e) {
++                        // Fallback: discard the entity if reflection fails
++                        item.discard();
++                    }
 +                    cleanedCount++;
 +                } else if (entity instanceof net.minecraft.world.entity.ExperienceOrb xp) {
 +                    // Accelerate XP despawn by setting age high
-+                    xp.age = 5900;
++                    try {
++                        java.lang.reflect.Field ageField = net.minecraft.world.entity.ExperienceOrb.class.getDeclaredField("age");
++                        ageField.setAccessible(true);
++                        ageField.setInt(xp, 5900);
++                    } catch (ReflectiveOperationException e) {
++                        xp.discard();
++                    }
 +                    cleanedCount++;
 +                }
 +

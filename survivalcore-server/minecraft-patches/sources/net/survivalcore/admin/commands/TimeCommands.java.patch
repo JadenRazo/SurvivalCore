@@ -1,0 +1,53 @@
+--- /dev/null
++++ b/net/survivalcore/admin/commands/TimeCommands.java
+@@ -1,0 +_,50 @@
++package net.survivalcore.admin.commands;
++
++import java.util.List;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.survivalcore.admin.PermissionNodes;
++import org.bukkit.command.Command;
++import org.bukkit.command.CommandSender;
++import org.bukkit.command.SimpleCommandMap;
++import org.bukkit.entity.Player;
++import org.checkerframework.checker.nullness.qual.NonNull;
++
++public final class TimeCommands {
++
++    private TimeCommands() {}
++
++    public static int register(final SimpleCommandMap map) {
++        map.register("survivalcore", timeCommand("day", 1000));
++        map.register("survivalcore", timeCommand("noon", 6000));
++        map.register("survivalcore", timeCommand("night", 13000));
++        map.register("survivalcore", timeCommand("midnight", 18000));
++        return 4;
++    }
++
++    private static Command timeCommand(final String name, final long ticks) {
++        return new Command(name, "Set time to " + name, "/" + name, List.of()) {
++            {
++                setPermission(PermissionNodes.TIME);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                player.getWorld().setTime(ticks);
++                sender.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Time set to ", NamedTextColor.YELLOW))
++                        .append(Component.text(name, NamedTextColor.GOLD))
++                );
++                return true;
++            }
++        };
++    }
++}

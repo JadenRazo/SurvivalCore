@@ -1,0 +1,293 @@
+--- /dev/null
++++ b/net/survivalcore/admin/AdminCommands.java
+@@ -1,0 +_,290 @@
++package net.survivalcore.admin;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Map;
++import java.util.Set;
++import java.util.UUID;
++import java.util.concurrent.ConcurrentHashMap;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.minecraft.server.MinecraftServer;
++import net.survivalcore.admin.commands.*;
++import org.bukkit.Bukkit;
++import org.bukkit.Location;
++import org.bukkit.command.SimpleCommandMap;
++import org.bukkit.entity.Player;
++import org.bukkit.event.EventHandler;
++import org.bukkit.event.EventPriority;
++import org.bukkit.event.Listener;
++import org.bukkit.event.entity.EntityDamageEvent;
++import org.bukkit.event.entity.PlayerDeathEvent;
++import org.bukkit.event.player.AsyncPlayerChatEvent;
++import org.bukkit.event.player.PlayerCommandPreprocessEvent;
++import org.bukkit.event.player.PlayerJoinEvent;
++import org.bukkit.event.player.PlayerMoveEvent;
++import org.bukkit.event.player.PlayerQuitEvent;
++import org.bukkit.event.player.PlayerTeleportEvent;
++import org.bukkit.permissions.Permission;
++import org.bukkit.permissions.PermissionDefault;
++import org.bukkit.plugin.PluginManager;
++
++/**
++ * Bulk registration for all admin QoL commands and their event listeners.
++ */
++public final class AdminCommands implements Listener {
++
++    // Existing state
++    private static final Map<UUID, Location> BACK_LOCATIONS = new ConcurrentHashMap<>();
++    private static final Set<UUID> GOD_PLAYERS = ConcurrentHashMap.newKeySet();
++    private static final Set<UUID> VANISHED_PLAYERS = ConcurrentHashMap.newKeySet();
++
++    // Staff tools state
++    private static final Set<UUID> FROZEN_PLAYERS = ConcurrentHashMap.newKeySet();
++    private static final Set<UUID> STAFF_CHAT_TOGGLED = ConcurrentHashMap.newKeySet();
++    private static final Set<UUID> SOCIAL_SPY_PLAYERS = ConcurrentHashMap.newKeySet();
++    private static final Set<UUID> TP_TOGGLE_PLAYERS = ConcurrentHashMap.newKeySet();
++
++    // Mute state: UUID -> unmute timestamp in millis (-1 = permanent)
++    private static final Map<UUID, Long> MUTED_PLAYERS = new ConcurrentHashMap<>();
++
++    // Warning state: UUID -> list of warning reasons
++    private static final Map<UUID, List<String>> WARNINGS = new ConcurrentHashMap<>();
++
++    // Join time tracking for /playtime and /seen
++    private static final Map<UUID, Long> JOIN_TIMES = new ConcurrentHashMap<>();
++    private static final Map<UUID, Long> LAST_SEEN = new ConcurrentHashMap<>();
++    private static final Map<UUID, String> LAST_SEEN_NAMES = new ConcurrentHashMap<>();
++
++    private AdminCommands() {}
++
++    // ==================== State Accessors ====================
++
++    public static Map<UUID, Location> getBackLocations() { return BACK_LOCATIONS; }
++    public static Set<UUID> getGodPlayers() { return GOD_PLAYERS; }
++    public static Set<UUID> getVanishedPlayers() { return VANISHED_PLAYERS; }
++    public static Set<UUID> getFrozenPlayers() { return FROZEN_PLAYERS; }
++    public static Set<UUID> getStaffChatToggled() { return STAFF_CHAT_TOGGLED; }
++    public static Set<UUID> getSocialSpyPlayers() { return SOCIAL_SPY_PLAYERS; }
++    public static Set<UUID> getTpTogglePlayers() { return TP_TOGGLE_PLAYERS; }
++    public static Map<UUID, Long> getMutedPlayers() { return MUTED_PLAYERS; }
++    public static Map<UUID, List<String>> getWarnings() { return WARNINGS; }
++    public static Map<UUID, Long> getJoinTimes() { return JOIN_TIMES; }
++    public static Map<UUID, Long> getLastSeen() { return LAST_SEEN; }
++    public static Map<UUID, String> getLastSeenNames() { return LAST_SEEN_NAMES; }
++
++    /**
++     * Check if a player is currently muted.
++     */
++    public static boolean isMuted(final UUID uuid) {
++        final Long expiry = MUTED_PLAYERS.get(uuid);
++        if (expiry == null) return false;
++        if (expiry == -1L) return true; // permanent
++        if (System.currentTimeMillis() >= expiry) {
++            MUTED_PLAYERS.remove(uuid);
++            return false;
++        }
++        return true;
++    }
++
++    /**
++     * Register all admin commands with the server command map.
++     * Called from DedicatedServer after SurvivalCore init.
++     */
++    public static void registerAll(final MinecraftServer server) {
++        final SimpleCommandMap commandMap = (SimpleCommandMap) server.server.getCommandMap();
++
++        // Register permissions
++        registerPermissions();
++
++        // Register command categories
++        int count = 0;
++        count += TimeCommands.register(commandMap);
++        count += GamemodeCommands.register(commandMap);
++        count += WeatherCommands.register(commandMap);
++        count += PlayerCommands.register(commandMap);
++        count += TeleportCommands.register(commandMap);
++        count += ModerationCommands.register(commandMap);
++        count += UtilityCommands.register(commandMap);
++        count += StaffCommands.register(commandMap);
++        count += InventoryCommands.register(commandMap);
++        count += ChatCommands.register(commandMap);
++        count += ExtendedCommands.register(commandMap);
++
++        // Register plugin manager command
++        commandMap.register("survivalcore", new net.survivalcore.admin.commands.PluginManagerCommand("plugman"));
++
++        // Register event listeners via Bukkit
++        final AdminCommands listener = new AdminCommands();
++        Bukkit.getScheduler().scheduleSyncDelayedTask(
++            Bukkit.getPluginManager().getPlugins()[0],
++            () -> Bukkit.getPluginManager().registerEvents(listener, Bukkit.getPluginManager().getPlugins()[0])
++        );
++
++        java.util.logging.Logger.getLogger("SurvivalCore").info("Registered " + count + " admin commands");
++    }
++
++    private static void registerPermissions() {
++        final PluginManager pm = Bukkit.getServer().getPluginManager();
++        final String[] nodes = {
++            // Original
++            PermissionNodes.TIME, PermissionNodes.GAMEMODE, PermissionNodes.WEATHER,
++            PermissionNodes.HEAL, PermissionNodes.FEED, PermissionNodes.FLY,
++            PermissionNodes.GOD, PermissionNodes.SPEED, PermissionNodes.TPHERE,
++            PermissionNodes.TOP, PermissionNodes.BACK, PermissionNodes.VANISH,
++            PermissionNodes.INVSEE, PermissionNodes.ENDERSEE, PermissionNodes.BROADCAST,
++            PermissionNodes.CLEARCHAT, PermissionNodes.PING,
++            // Staff tools
++            PermissionNodes.FREEZE, PermissionNodes.STAFFCHAT, PermissionNodes.NEAR,
++            PermissionNodes.SEEN, PermissionNodes.WHOIS, PermissionNodes.SUDO,
++            // Inventory QoL
++            PermissionNodes.REPAIR, PermissionNodes.MORE, PermissionNodes.HAT,
++            PermissionNodes.SKULL, PermissionNodes.WORKBENCH, PermissionNodes.DISPOSAL,
++            // Chat & moderation
++            PermissionNodes.MUTE, PermissionNodes.WARN, PermissionNodes.SOCIALSPY,
++            // Extended utilities
++            PermissionNodes.TPPOS, PermissionNodes.TPALL, PermissionNodes.TP_OTHERS,
++            PermissionNodes.COORDS, PermissionNodes.BIOME, PermissionNodes.PLAYTIME,
++            PermissionNodes.TPTOGGLE, PermissionNodes.EXT, PermissionNodes.SMITE,
++            // Plugin manager
++            PermissionNodes.PLUGMAN, PermissionNodes.PLUGMAN_LOAD, PermissionNodes.PLUGMAN_UNLOAD,
++            PermissionNodes.PLUGMAN_RELOAD, PermissionNodes.PLUGMAN_ENABLE, PermissionNodes.PLUGMAN_DISABLE,
++            PermissionNodes.PLUGMAN_INFO, PermissionNodes.PLUGMAN_LIST, PermissionNodes.PLUGMAN_LOOKUP,
++            PermissionNodes.PLUGMAN_USAGE, PermissionNodes.PLUGMAN_DUMP, PermissionNodes.PLUGMAN_RESTART
++        };
++        for (final String node : nodes) {
++            try {
++                if (pm.getPermission(node) == null) {
++                    pm.addPermission(new Permission(node, PermissionDefault.OP));
++                }
++            } catch (Exception ignored) {}
++        }
++    }
++
++    // ==================== Event Listeners ====================
++
++    @EventHandler(priority = EventPriority.MONITOR)
++    public void onTeleport(final PlayerTeleportEvent event) {
++        if (!event.isCancelled() && event.getFrom().getWorld() != null) {
++            BACK_LOCATIONS.put(event.getPlayer().getUniqueId(), event.getFrom());
++        }
++    }
++
++    @EventHandler(priority = EventPriority.MONITOR)
++    public void onDeath(final PlayerDeathEvent event) {
++        final Player player = event.getEntity();
++        if (player.getLocation().getWorld() != null) {
++            BACK_LOCATIONS.put(player.getUniqueId(), player.getLocation());
++        }
++    }
++
++    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
++    public void onDamage(final EntityDamageEvent event) {
++        if (event.getEntity() instanceof Player player) {
++            if (GOD_PLAYERS.contains(player.getUniqueId())) {
++                event.setCancelled(true);
++            }
++        }
++    }
++
++    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
++    public void onMove(final PlayerMoveEvent event) {
++        if (FROZEN_PLAYERS.contains(event.getPlayer().getUniqueId())) {
++            // Allow head rotation but not position changes
++            final Location from = event.getFrom();
++            final Location to = event.getTo();
++            if (from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ()) {
++                event.setTo(event.getFrom());
++            }
++        }
++    }
++
++    @EventHandler(priority = EventPriority.LOWEST)
++    public void onChat(final AsyncPlayerChatEvent event) {
++        final Player player = event.getPlayer();
++        final UUID uuid = player.getUniqueId();
++
++        // Check mute
++        if (isMuted(uuid)) {
++            event.setCancelled(true);
++            player.sendMessage(Component.text("You are muted.", NamedTextColor.RED));
++            return;
++        }
++
++        // Staff chat redirect
++        if (STAFF_CHAT_TOGGLED.contains(uuid)) {
++            event.setCancelled(true);
++            final Component staffMsg = Component.text("[Staff] ", NamedTextColor.DARK_AQUA)
++                .append(Component.text(player.getName(), NamedTextColor.AQUA))
++                .append(Component.text(": ", NamedTextColor.GRAY))
++                .append(Component.text(event.getMessage(), NamedTextColor.WHITE));
++            for (final Player online : Bukkit.getOnlinePlayers()) {
++                if (online.hasPermission(PermissionNodes.STAFFCHAT)) {
++                    online.sendMessage(staffMsg);
++                }
++            }
++            // Also log to console
++            Bukkit.getConsoleSender().sendMessage(staffMsg);
++            return;
++        }
++
++        // Social spy: forward all chat to social spy users (they see it anyway, but this is for /msg intercept)
++    }
++
++    @EventHandler(priority = EventPriority.MONITOR)
++    public void onCommandPreprocess(final PlayerCommandPreprocessEvent event) {
++        if (event.isCancelled()) return;
++
++        // Social spy: intercept /msg, /tell, /whisper, /w, /r
++        final String msg = event.getMessage().toLowerCase();
++        if (msg.startsWith("/msg ") || msg.startsWith("/tell ") || msg.startsWith("/whisper ") || msg.startsWith("/w ") || msg.startsWith("/r ")) {
++            final Component spyMsg = Component.text("[Spy] ", NamedTextColor.DARK_GRAY)
++                .append(Component.text(event.getPlayer().getName(), NamedTextColor.GRAY))
++                .append(Component.text(": ", NamedTextColor.DARK_GRAY))
++                .append(Component.text(event.getMessage(), NamedTextColor.GRAY));
++            for (final UUID spyId : SOCIAL_SPY_PLAYERS) {
++                if (spyId.equals(event.getPlayer().getUniqueId())) continue;
++                final Player spy = Bukkit.getPlayer(spyId);
++                if (spy != null && spy.isOnline()) {
++                    spy.sendMessage(spyMsg);
++                }
++            }
++        }
++    }
++
++    @EventHandler
++    public void onJoin(final PlayerJoinEvent event) {
++        final Player player = event.getPlayer();
++        final UUID uuid = player.getUniqueId();
++
++        // Track join time for /playtime
++        JOIN_TIMES.put(uuid, System.currentTimeMillis());
++
++        // Hide vanished players from the joining player
++        for (final UUID vanishedId : VANISHED_PLAYERS) {
++            final Player vanished = Bukkit.getPlayer(vanishedId);
++            if (vanished != null && vanished.isOnline()) {
++                player.hidePlayer(Bukkit.getPluginManager().getPlugins()[0], vanished);
++            }
++        }
++    }
++
++    @EventHandler
++    public void onQuit(final PlayerQuitEvent event) {
++        final UUID uuid = event.getPlayer().getUniqueId();
++        final String name = event.getPlayer().getName();
++
++        // Track last seen
++        LAST_SEEN.put(uuid, System.currentTimeMillis());
++        LAST_SEEN_NAMES.put(uuid, name);
++
++        // Clean up transient state
++        GOD_PLAYERS.remove(uuid);
++        VANISHED_PLAYERS.remove(uuid);
++        FROZEN_PLAYERS.remove(uuid);
++        STAFF_CHAT_TOGGLED.remove(uuid);
++        SOCIAL_SPY_PLAYERS.remove(uuid);
++        TP_TOGGLE_PLAYERS.remove(uuid);
++        JOIN_TIMES.remove(uuid);
++    }
++}

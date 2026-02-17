@@ -22,6 +22,11 @@ survivalcore-server/src/
 .paper/
 run/
 
+# Build cache / libraries
+cache/
+libraries/
+versions/
+
 # OS files
 .DS_Store
 Thumbs.db

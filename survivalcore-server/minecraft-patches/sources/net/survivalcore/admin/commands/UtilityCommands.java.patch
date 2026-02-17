@@ -1,0 +1,141 @@
+--- /dev/null
++++ b/net/survivalcore/admin/commands/UtilityCommands.java
+@@ -1,0 +_,138 @@
++package net.survivalcore.admin.commands;
++
++import java.util.List;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.kyori.adventure.text.format.TextDecoration;
++import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
++import net.survivalcore.admin.PermissionNodes;
++import org.bukkit.Bukkit;
++import org.bukkit.Location;
++import org.bukkit.command.Command;
++import org.bukkit.command.CommandSender;
++import org.bukkit.command.SimpleCommandMap;
++import org.bukkit.craftbukkit.entity.CraftPlayer;
++import org.bukkit.entity.Player;
++import org.checkerframework.checker.nullness.qual.NonNull;
++import org.checkerframework.checker.nullness.qual.Nullable;
++
++public final class UtilityCommands {
++
++    private UtilityCommands() {}
++
++    public static int register(final SimpleCommandMap map) {
++        map.register("survivalcore", broadcastCommand());
++        map.register("survivalcore", clearchatCommand());
++        map.register("survivalcore", pingCommand());
++        return 3;
++    }
++
++    private static Command broadcastCommand() {
++        return new Command("broadcast", "Broadcast a message to all players", "/broadcast <message>", List.of("bc")) {
++            {
++                setPermission(PermissionNodes.BROADCAST);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (args.length < 1) {
++                    sender.sendMessage(
++                        Component.text("Usage: ", NamedTextColor.RED)
++                            .append(Component.text("/broadcast <message>", NamedTextColor.GRAY))
++                    );
++                    return true;
++                }
++
++                final String rawMessage = String.join(" ", args);
++                // Support legacy color codes with & prefix
++                final Component message = LegacyComponentSerializer.legacyAmpersand().deserialize(rawMessage);
++
++                final Component broadcast = Component.text("")
++                    .append(Component.text("[Broadcast] ", NamedTextColor.RED, TextDecoration.BOLD))
++                    .append(message);
++
++                Bukkit.broadcast(broadcast);
++                return true;
++            }
++        };
++    }
++
++    private static Command clearchatCommand() {
++        return new Command("clearchat", "Clear the chat for all players", "/clearchat", List.of("cc")) {
++            {
++                setPermission(PermissionNodes.CLEARCHAT);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                final Component empty = Component.empty();
++                for (final Player player : Bukkit.getOnlinePlayers()) {
++                    for (int i = 0; i < 100; i++) {
++                        player.sendMessage(empty);
++                    }
++                    player.sendMessage(
++                        Component.text("Chat has been cleared.", NamedTextColor.GRAY)
++                    );
++                }
++
++                sender.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Chat cleared.", NamedTextColor.YELLOW))
++                );
++                return true;
++            }
++        };
++    }
++
++    private static Command pingCommand() {
++        return new Command("ping", "Check a player's ping", "/ping [player]", List.of("latency")) {
++            {
++                setPermission(PermissionNodes.PING);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                final Player target = PlayerCommands.resolveTarget(sender, args);
++                if (target == null) return true;
++
++                final int ping = target.getPing();
++
++                final NamedTextColor pingColor;
++                if (ping < 50) {
++                    pingColor = NamedTextColor.GREEN;
++                } else if (ping < 100) {
++                    pingColor = NamedTextColor.YELLOW;
++                } else if (ping < 200) {
++                    pingColor = NamedTextColor.GOLD;
++                } else {
++                    pingColor = NamedTextColor.RED;
++                }
++
++                if (target.equals(sender)) {
++                    sender.sendMessage(
++                        Component.text("Your ping: ", NamedTextColor.YELLOW)
++                            .append(Component.text(ping + "ms", pingColor))
++                    );
++                } else {
++                    sender.sendMessage(
++                        Component.text(target.getName(), NamedTextColor.GOLD)
++                            .append(Component.text("'s ping: ", NamedTextColor.YELLOW))
++                            .append(Component.text(ping + "ms", pingColor))
++                    );
++                }
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? PlayerCommands.matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++}

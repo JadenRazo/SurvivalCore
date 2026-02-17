@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/monitoring/SparkIntegration.java
-@@ -1,0 +_,123 @@
+@@ -1,0 +_,136 @@
 +package net.survivalcore.monitoring;
 +
 +import java.lang.reflect.Method;
@@ -9,16 +9,12 @@
 +import java.util.logging.Logger;
 +import me.lucko.spark.api.Spark;
 +import me.lucko.spark.api.SparkProvider;
-+import me.lucko.spark.api.profiler.ProfilerType;
-+import me.lucko.spark.api.profiler.dumper.HeapDumper;
 +
 +/**
 + * Integration with the Spark profiler for advanced performance diagnostics.
 + * Spark is bundled with Paper 1.21+ so it's always available.
 + *
-+ * Provides /survivalcore profile <cpu|memory|tick> [duration] command support
-+ * that triggers Spark profiling sessions programmatically, with fallback
-+ * to built-in PerformanceMonitor data.
++ * Uses reflection for profiler methods to handle API changes across versions.
 + */
 +public final class SparkIntegration {
 +
@@ -65,9 +61,9 @@
 +        }
 +
 +        try {
-+            // Check if any profiler is running
-+            boolean cpuRunning = spark.cpuProfiler() != null && spark.cpuProfiler().isRunning();
-+            boolean tickRunning = spark.tickProfiler() != null && spark.tickProfiler().isRunning();
++            // Use reflection to check profiler status (API varies across versions)
++            boolean cpuRunning = isProfilerRunning("cpuProfiler");
++            boolean tickRunning = isProfilerRunning("tickProfiler");
 +
 +            if (cpuRunning) return "CPU profiler running";
 +            if (tickRunning) return "Tick profiler running";
@@ -75,6 +71,18 @@
 +        } catch (Exception e) {
 +            LOGGER.log(Level.WARNING, "Error checking Spark status", e);
 +            return "Status check failed";
++        }
++    }
++
++    private static boolean isProfilerRunning(String methodName) {
++        try {
++            Method profilerMethod = spark.getClass().getMethod(methodName);
++            Object profiler = profilerMethod.invoke(spark);
++            if (profiler == null) return false;
++            Method isRunning = profiler.getClass().getMethod("isRunning");
++            return (boolean) isRunning.invoke(profiler);
++        } catch (Exception e) {
++            return false;
 +        }
 +    }
 +
@@ -89,11 +97,12 @@
 +        if (durationSeconds < 1 || durationSeconds > 600) return false;
 +
 +        try {
-+            // Start async CPU profiler
-+            CompletableFuture<Void> future = spark.cpuProfiler().start();
++            Method profilerMethod = spark.getClass().getMethod("cpuProfiler");
++            Object profiler = profilerMethod.invoke(spark);
++            if (profiler == null) return false;
++            Method startMethod = profiler.getClass().getMethod("start");
++            CompletableFuture<Void> future = (CompletableFuture<Void>) startMethod.invoke(profiler);
 +            LOGGER.info("Started CPU profiler for " + durationSeconds + " seconds");
-+
-+            // Schedule automatic stop
 +            scheduleStop(future, durationSeconds, "CPU");
 +            return true;
 +        } catch (Exception e) {
@@ -110,7 +119,11 @@
 +        if (durationSeconds < 1 || durationSeconds > 600) return false;
 +
 +        try {
-+            CompletableFuture<Void> future = spark.tickProfiler().start();
++            Method profilerMethod = spark.getClass().getMethod("tickProfiler");
++            Object profiler = profilerMethod.invoke(spark);
++            if (profiler == null) return false;
++            Method startMethod = profiler.getClass().getMethod("start");
++            CompletableFuture<Void> future = (CompletableFuture<Void>) startMethod.invoke(profiler);
 +            LOGGER.info("Started tick profiler for " + durationSeconds + " seconds");
 +            scheduleStop(future, durationSeconds, "Tick");
 +            return true;

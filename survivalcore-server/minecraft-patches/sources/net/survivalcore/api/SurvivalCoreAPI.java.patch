@@ -32,7 +32,7 @@
 +    private SurvivalCoreConfigAPI configAPI;
 +    private EntityUtils entityUtils;
 +
-+    private SurvivalCoreAPI() {}
++    SurvivalCoreAPI() {}
 +
 +    /**
 +     * Get the singleton SurvivalCore API instance.

@@ -1,0 +1,107 @@
+--- /dev/null
++++ b/net/survivalcore/admin/commands/WeatherCommands.java
+@@ -1,0 +_,104 @@
++package net.survivalcore.admin.commands;
++
++import java.util.List;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.survivalcore.admin.PermissionNodes;
++import org.bukkit.command.Command;
++import org.bukkit.command.CommandSender;
++import org.bukkit.command.SimpleCommandMap;
++import org.bukkit.entity.Player;
++import org.checkerframework.checker.nullness.qual.NonNull;
++
++public final class WeatherCommands {
++
++    private WeatherCommands() {}
++
++    public static int register(final SimpleCommandMap map) {
++        map.register("survivalcore", sunCommand());
++        map.register("survivalcore", rainCommand());
++        map.register("survivalcore", thunderCommand());
++        return 3;
++    }
++
++    private static Command sunCommand() {
++        return new Command("sun", "Set weather to clear", "/sun", List.of("clearweather")) {
++            {
++                setPermission(PermissionNodes.WEATHER);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                player.getWorld().setStorm(false);
++                player.getWorld().setThundering(false);
++                sender.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Weather set to ", NamedTextColor.YELLOW))
++                        .append(Component.text("clear", NamedTextColor.GOLD))
++                );
++                return true;
++            }
++        };
++    }
++
++    private static Command rainCommand() {
++        return new Command("rain", "Set weather to rain", "/rain", List.of()) {
++            {
++                setPermission(PermissionNodes.WEATHER);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                player.getWorld().setStorm(true);
++                player.getWorld().setThundering(false);
++                sender.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Weather set to ", NamedTextColor.YELLOW))
++                        .append(Component.text("rain", NamedTextColor.GOLD))
++                );
++                return true;
++            }
++        };
++    }
++
++    private static Command thunderCommand() {
++        return new Command("thunder", "Set weather to thunderstorm", "/thunder", List.of("storm")) {
++            {
++                setPermission(PermissionNodes.WEATHER);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                player.getWorld().setStorm(true);
++                player.getWorld().setThundering(true);
++                sender.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Weather set to ", NamedTextColor.YELLOW))
++                        .append(Component.text("thunderstorm", NamedTextColor.GOLD))
++                );
++                return true;
++            }
++        };
++    }
++}

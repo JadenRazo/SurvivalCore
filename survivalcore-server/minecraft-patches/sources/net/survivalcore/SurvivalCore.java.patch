@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/SurvivalCore.java
-@@ -1,0 +_,218 @@
+@@ -1,0 +_,212 @@
 +package net.survivalcore;
 +
 +import java.nio.file.Path;
@@ -13,7 +13,6 @@
 +import net.survivalcore.async.AsyncPathfinder;
 +import net.survivalcore.async.ChunkPreloader;
 +import net.survivalcore.config.SurvivalCoreConfig;
-+import net.survivalcore.config.WorldConfigManager;
 +import net.survivalcore.monitoring.EntityReport;
 +import net.survivalcore.monitoring.PerformanceMonitor;
 +import net.survivalcore.monitoring.SparkIntegration;
@@ -59,9 +58,6 @@
 +        // 1. Load configuration first (everything else depends on it)
 +        SurvivalCoreConfig.init(serverRoot);
 +        SurvivalCoreConfig config = SurvivalCoreConfig.get();
-+
-+        // 1b. Initialize per-world config manager
-+        WorldConfigManager.init(serverRoot);
 +
 +        // 2. Initialize async thread pools
 +        AsyncEntityTracker.init();
@@ -164,7 +160,6 @@
 +
 +        LOGGER.info("Reloading " + NAME + " configuration...");
 +        SurvivalCoreConfig.init(serverRoot);
-+        WorldConfigManager.get().reload();
 +
 +        // Re-init subsystems that read config at init time
 +        FastLighting.init();

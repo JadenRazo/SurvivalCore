@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/admin/PermissionNodes.java
-@@ -1,0 +_,43 @@
+@@ -1,0 +_,98 @@
 +package net.survivalcore.admin;
 +
 +/**
@@ -32,14 +32,70 @@
 +    /** Permission for /survivalcore lagspike */
 +    public static final String LAGSPIKE = BASE + ".lagspike";
 +
-+    /** Permission for /survivalcore entity */
-+    public static final String ENTITY = BASE + ".entity";
++    // Admin QoL command permissions
++    public static final String TIME = BASE + ".time";
++    public static final String GAMEMODE = BASE + ".gamemode";
++    public static final String WEATHER = BASE + ".weather";
++    public static final String HEAL = BASE + ".heal";
++    public static final String FEED = BASE + ".feed";
++    public static final String FLY = BASE + ".fly";
++    public static final String GOD = BASE + ".god";
++    public static final String SPEED = BASE + ".speed";
++    public static final String TPHERE = BASE + ".tphere";
++    public static final String TOP = BASE + ".top";
++    public static final String BACK = BASE + ".back";
++    public static final String VANISH = BASE + ".vanish";
++    public static final String INVSEE = BASE + ".invsee";
++    public static final String ENDERSEE = BASE + ".endersee";
++    public static final String BROADCAST = BASE + ".broadcast";
++    public static final String CLEARCHAT = BASE + ".clearchat";
++    public static final String PING = BASE + ".ping";
 +
-+    /** Permission for /survivalcore chunks */
-+    public static final String CHUNKS = BASE + ".chunks";
++    // Staff tools
++    public static final String FREEZE = BASE + ".freeze";
++    public static final String STAFFCHAT = BASE + ".staffchat";
++    public static final String NEAR = BASE + ".near";
++    public static final String SEEN = BASE + ".seen";
++    public static final String WHOIS = BASE + ".whois";
++    public static final String SUDO = BASE + ".sudo";
 +
-+    /** Permission for /survivalcore entities */
-+    public static final String ENTITIES = BASE + ".entities";
++    // Inventory & item QoL
++    public static final String REPAIR = BASE + ".repair";
++    public static final String MORE = BASE + ".more";
++    public static final String HAT = BASE + ".hat";
++    public static final String SKULL = BASE + ".skull";
++    public static final String WORKBENCH = BASE + ".workbench";
++    public static final String DISPOSAL = BASE + ".disposal";
++
++    // Chat & moderation
++    public static final String MUTE = BASE + ".mute";
++    public static final String WARN = BASE + ".warn";
++    public static final String SOCIALSPY = BASE + ".socialspy";
++
++    // Plugin manager
++    public static final String PLUGMAN = BASE + ".plugman";
++    public static final String PLUGMAN_LOAD = PLUGMAN + ".load";
++    public static final String PLUGMAN_UNLOAD = PLUGMAN + ".unload";
++    public static final String PLUGMAN_RELOAD = PLUGMAN + ".reload";
++    public static final String PLUGMAN_ENABLE = PLUGMAN + ".enable";
++    public static final String PLUGMAN_DISABLE = PLUGMAN + ".disable";
++    public static final String PLUGMAN_INFO = PLUGMAN + ".info";
++    public static final String PLUGMAN_LIST = PLUGMAN + ".list";
++    public static final String PLUGMAN_LOOKUP = PLUGMAN + ".lookup";
++    public static final String PLUGMAN_USAGE = PLUGMAN + ".usage";
++    public static final String PLUGMAN_DUMP = PLUGMAN + ".dump";
++    public static final String PLUGMAN_RESTART = PLUGMAN + ".restart";
++
++    // Extended utilities
++    public static final String TPPOS = BASE + ".tppos";
++    public static final String TPALL = BASE + ".tpall";
++    public static final String TP_OTHERS = BASE + ".tp";
++    public static final String COORDS = BASE + ".coords";
++    public static final String BIOME = BASE + ".biome";
++    public static final String PLAYTIME = BASE + ".playtime";
++    public static final String TPTOGGLE = BASE + ".tptoggle";
++    public static final String EXT = BASE + ".ext";
++    public static final String SMITE = BASE + ".smite";
 +
 +    private PermissionNodes() {}
 +}

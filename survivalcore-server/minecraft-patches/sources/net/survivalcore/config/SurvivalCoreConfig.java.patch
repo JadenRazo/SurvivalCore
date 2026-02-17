@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/config/SurvivalCoreConfig.java
-@@ -1,0 +_,1065 @@
+@@ -1,0 +_,1060 @@
 +package net.survivalcore.config;
 +
 +import java.io.IOException;
@@ -23,9 +23,6 @@
 +
 +    private static final Logger LOGGER = Logger.getLogger("SurvivalCore");
 +    private static SurvivalCoreConfig instance;
-+
-+    // Package-private for WorldConfig access
-+    CommentedConfigurationNode root;
 +
 +    // ── Async: Entity Tracker ────────────────────────────
 +    public final boolean asyncEntityTrackerEnabled;
@@ -272,7 +269,6 @@
 +    public int villagerLobotomizeCheckInterval;
 +
 +    private SurvivalCoreConfig(CommentedConfigurationNode root) {
-+        this.root = root;
 +        CommentedConfigurationNode async = root.node("async");
 +        CommentedConfigurationNode tracker = async.node("entity-tracker");
 +        this.asyncEntityTrackerEnabled = tracker.node("enabled").getBoolean(true);

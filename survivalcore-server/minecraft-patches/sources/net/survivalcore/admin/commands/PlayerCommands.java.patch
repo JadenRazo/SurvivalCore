@@ -1,0 +1,313 @@
+--- /dev/null
++++ b/net/survivalcore/admin/commands/PlayerCommands.java
+@@ -1,0 +_,310 @@
++package net.survivalcore.admin.commands;
++
++import java.util.ArrayList;
++import java.util.List;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.survivalcore.admin.AdminCommands;
++import net.survivalcore.admin.PermissionNodes;
++import org.bukkit.Bukkit;
++import org.bukkit.Location;
++import org.bukkit.attribute.Attribute;
++import org.bukkit.command.Command;
++import org.bukkit.command.CommandSender;
++import org.bukkit.command.SimpleCommandMap;
++import org.bukkit.entity.Player;
++import org.checkerframework.checker.nullness.qual.NonNull;
++import org.checkerframework.checker.nullness.qual.Nullable;
++
++public final class PlayerCommands {
++
++    private PlayerCommands() {}
++
++    public static int register(final SimpleCommandMap map) {
++        map.register("survivalcore", healCommand());
++        map.register("survivalcore", feedCommand());
++        map.register("survivalcore", flyCommand());
++        map.register("survivalcore", godCommand());
++        map.register("survivalcore", speedCommand());
++        return 5;
++    }
++
++    private static Command healCommand() {
++        return new Command("heal", "Heal a player to full health", "/heal [player]", List.of()) {
++            {
++                setPermission(PermissionNodes.HEAL);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                final Player target = resolveTarget(sender, args);
++                if (target == null) return true;
++
++                final double maxHealth = target.getAttribute(Attribute.MAX_HEALTH).getValue();
++                target.setHealth(maxHealth);
++                target.setFireTicks(0);
++                target.getActivePotionEffects().forEach(e -> target.removePotionEffect(e.getType()));
++
++                target.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("You have been healed.", NamedTextColor.YELLOW))
++                );
++                if (!target.equals(sender)) {
++                    sender.sendMessage(
++                        Component.text("✓ ", NamedTextColor.GREEN)
++                            .append(Component.text("Healed ", NamedTextColor.YELLOW))
++                            .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                    );
++                }
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    private static Command feedCommand() {
++        return new Command("feed", "Feed a player to full hunger", "/feed [player]", List.of()) {
++            {
++                setPermission(PermissionNodes.FEED);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                final Player target = resolveTarget(sender, args);
++                if (target == null) return true;
++
++                target.setFoodLevel(20);
++                target.setSaturation(20f);
++                target.setExhaustion(0f);
++
++                target.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("You have been fed.", NamedTextColor.YELLOW))
++                );
++                if (!target.equals(sender)) {
++                    sender.sendMessage(
++                        Component.text("✓ ", NamedTextColor.GREEN)
++                            .append(Component.text("Fed ", NamedTextColor.YELLOW))
++                            .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                    );
++                }
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    private static Command flyCommand() {
++        return new Command("fly", "Toggle flight for a player", "/fly [player]", List.of()) {
++            {
++                setPermission(PermissionNodes.FLY);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                final Player target = resolveTarget(sender, args);
++                if (target == null) return true;
++
++                final boolean flying = !target.getAllowFlight();
++                target.setAllowFlight(flying);
++                if (flying) {
++                    target.setFlying(true);
++                }
++
++                final String state = flying ? "enabled" : "disabled";
++                target.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Flight " + state + ".", NamedTextColor.YELLOW))
++                );
++                if (!target.equals(sender)) {
++                    sender.sendMessage(
++                        Component.text("✓ ", NamedTextColor.GREEN)
++                            .append(Component.text("Flight " + state + " for ", NamedTextColor.YELLOW))
++                            .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                    );
++                }
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    private static Command godCommand() {
++        return new Command("god", "Toggle god mode for a player", "/god [player]", List.of()) {
++            {
++                setPermission(PermissionNodes.GOD);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                final Player target = resolveTarget(sender, args);
++                if (target == null) return true;
++
++                final boolean enabled;
++                if (AdminCommands.getGodPlayers().contains(target.getUniqueId())) {
++                    AdminCommands.getGodPlayers().remove(target.getUniqueId());
++                    enabled = false;
++                } else {
++                    AdminCommands.getGodPlayers().add(target.getUniqueId());
++                    enabled = true;
++                }
++
++                final String state = enabled ? "enabled" : "disabled";
++                target.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("God mode " + state + ".", NamedTextColor.YELLOW))
++                );
++                if (!target.equals(sender)) {
++                    sender.sendMessage(
++                        Component.text("✓ ", NamedTextColor.GREEN)
++                            .append(Component.text("God mode " + state + " for ", NamedTextColor.YELLOW))
++                            .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                    );
++                }
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    private static Command speedCommand() {
++        return new Command("speed", "Set walk/fly speed", "/speed <1-10> [player]", List.of()) {
++            {
++                setPermission(PermissionNodes.SPEED);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (args.length < 1) {
++                    sender.sendMessage(
++                        Component.text("Usage: ", NamedTextColor.RED)
++                            .append(Component.text("/speed <1-10> [player]", NamedTextColor.GRAY))
++                    );
++                    return true;
++                }
++
++                final int speedValue;
++                try {
++                    speedValue = Integer.parseInt(args[0]);
++                    if (speedValue < 1 || speedValue > 10) {
++                        sender.sendMessage(Component.text("Speed must be between 1 and 10.", NamedTextColor.RED));
++                        return true;
++                    }
++                } catch (NumberFormatException e) {
++                    sender.sendMessage(Component.text("Invalid speed value.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final Player target;
++                if (args.length > 1) {
++                    target = Bukkit.getPlayer(args[1]);
++                    if (target == null) {
++                        sender.sendMessage(
++                            Component.text("Player not found: ", NamedTextColor.RED)
++                                .append(Component.text(args[1], NamedTextColor.GOLD))
++                        );
++                        return true;
++                    }
++                } else if (sender instanceof Player player) {
++                    target = player;
++                } else {
++                    sender.sendMessage(Component.text("Specify a player when using from console.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final float normalizedSpeed = speedValue / 10.0f;
++                if (target.isFlying()) {
++                    target.setFlySpeed(normalizedSpeed);
++                } else {
++                    target.setWalkSpeed(normalizedSpeed);
++                }
++
++                final String speedType = target.isFlying() ? "fly" : "walk";
++                target.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Your " + speedType + " speed set to ", NamedTextColor.YELLOW))
++                        .append(Component.text(String.valueOf(speedValue), NamedTextColor.GOLD))
++                );
++                if (!target.equals(sender)) {
++                    sender.sendMessage(
++                        Component.text("✓ ", NamedTextColor.GREEN)
++                            .append(Component.text("Set ", NamedTextColor.YELLOW))
++                            .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                            .append(Component.text("'s " + speedType + " speed to ", NamedTextColor.YELLOW))
++                            .append(Component.text(String.valueOf(speedValue), NamedTextColor.GOLD))
++                    );
++                }
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                if (args.length == 1) {
++                    return List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10");
++                }
++                if (args.length == 2) {
++                    return matchPlayers(args[1]);
++                }
++                return List.of();
++            }
++        };
++    }
++
++    // ==================== Helpers ====================
++
++    static Player resolveTarget(final CommandSender sender, final String[] args) {
++        if (args.length > 0) {
++            final Player target = Bukkit.getPlayer(args[0]);
++            if (target == null) {
++                sender.sendMessage(
++                    Component.text("Player not found: ", NamedTextColor.RED)
++                        .append(Component.text(args[0], NamedTextColor.GOLD))
++                );
++                return null;
++            }
++            return target;
++        }
++        if (sender instanceof Player player) {
++            return player;
++        }
++        sender.sendMessage(Component.text("Specify a player when using from console.", NamedTextColor.RED));
++        return null;
++    }
++
++    static List<String> matchPlayers(final String partial) {
++        final String lower = partial.toLowerCase();
++        final List<String> completions = new ArrayList<>();
++        for (final Player p : Bukkit.getOnlinePlayers()) {
++            if (p.getName().toLowerCase().startsWith(lower)) {
++                completions.add(p.getName());
++            }
++        }
++        return completions;
++    }
++}

@@ -1,0 +1,96 @@
+--- /dev/null
++++ b/net/survivalcore/admin/commands/GamemodeCommands.java
+@@ -1,0 +_,93 @@
++package net.survivalcore.admin.commands;
++
++import java.util.ArrayList;
++import java.util.List;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.survivalcore.admin.PermissionNodes;
++import org.bukkit.Bukkit;
++import org.bukkit.GameMode;
++import org.bukkit.Location;
++import org.bukkit.command.Command;
++import org.bukkit.command.CommandSender;
++import org.bukkit.command.SimpleCommandMap;
++import org.bukkit.entity.Player;
++import org.checkerframework.checker.nullness.qual.NonNull;
++import org.checkerframework.checker.nullness.qual.Nullable;
++
++public final class GamemodeCommands {
++
++    private GamemodeCommands() {}
++
++    public static int register(final SimpleCommandMap map) {
++        map.register("survivalcore", gamemodeCommand("gms", GameMode.SURVIVAL, List.of()));
++        map.register("survivalcore", gamemodeCommand("gmc", GameMode.CREATIVE, List.of()));
++        map.register("survivalcore", gamemodeCommand("gma", GameMode.ADVENTURE, List.of()));
++        map.register("survivalcore", gamemodeCommand("gmsp", GameMode.SPECTATOR, List.of()));
++        return 4;
++    }
++
++    private static Command gamemodeCommand(final String name, final GameMode mode, final List<String> aliases) {
++        return new Command(name, "Set gamemode to " + mode.name().toLowerCase(), "/" + name + " [player]", aliases) {
++            {
++                setPermission(PermissionNodes.GAMEMODE);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                Player target;
++                if (args.length > 0) {
++                    target = Bukkit.getPlayer(args[0]);
++                    if (target == null) {
++                        sender.sendMessage(
++                            Component.text("Player not found: ", NamedTextColor.RED)
++                                .append(Component.text(args[0], NamedTextColor.GOLD))
++                        );
++                        return true;
++                    }
++                } else if (sender instanceof Player player) {
++                    target = player;
++                } else {
++                    sender.sendMessage(Component.text("Specify a player when using from console.", NamedTextColor.RED));
++                    return true;
++                }
++
++                target.setGameMode(mode);
++                final String modeName = mode.name().toLowerCase();
++
++                target.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Gamemode set to ", NamedTextColor.YELLOW))
++                        .append(Component.text(modeName, NamedTextColor.GOLD))
++                );
++                if (!target.equals(sender)) {
++                    sender.sendMessage(
++                        Component.text("✓ ", NamedTextColor.GREEN)
++                            .append(Component.text("Set ", NamedTextColor.YELLOW))
++                            .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                            .append(Component.text("'s gamemode to ", NamedTextColor.YELLOW))
++                            .append(Component.text(modeName, NamedTextColor.GOLD))
++                    );
++                }
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                if (args.length == 1) {
++                    final String partial = args[0].toLowerCase();
++                    final List<String> completions = new ArrayList<>();
++                    for (final Player p : Bukkit.getOnlinePlayers()) {
++                        if (p.getName().toLowerCase().startsWith(partial)) {
++                            completions.add(p.getName());
++                        }
++                    }
++                    return completions;
++                }
++                return List.of();
++            }
++        };
++    }
++}

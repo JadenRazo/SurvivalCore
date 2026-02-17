@@ -1,0 +1,18 @@
+--- a/net/minecraft/server/dedicated/DedicatedServer.java
++++ b/net/minecraft/server/dedicated/DedicatedServer.java
+@@ -181,6 +_,15 @@
+         org.spigotmc.WatchdogThread.doStart(org.spigotmc.SpigotConfig.timeoutTime, org.spigotmc.SpigotConfig.restartOnCrash); // Paper - start watchdog thread
+         thread.start(); // Paper - Enhance console tab completions for brigadier commands; start console thread after MinecraftServer.console & PaperConfig are initialized
+         io.papermc.paper.command.PaperCommands.registerCommands(this); // Paper - setup /paper command
++        // SurvivalCore start - Initialize and register command
++        try {
++            net.survivalcore.SurvivalCore.init(java.nio.file.Path.of("."));
++            net.survivalcore.admin.SurvivalCoreCommand.registerCommand(this);
++            net.survivalcore.admin.AdminCommands.registerAll(this);
++        } catch (Exception e) {
++            LOGGER.error("Failed to initialize SurvivalCore", e);
++        }
++        // SurvivalCore end
+         this.server.spark.registerCommandBeforePlugins(this.server); // Paper - spark
+         com.destroystokyo.paper.Metrics.PaperMetrics.startMetrics(); // Paper - start metrics
+         com.destroystokyo.paper.VersionHistoryManager.INSTANCE.getClass(); // Paper - load version history now

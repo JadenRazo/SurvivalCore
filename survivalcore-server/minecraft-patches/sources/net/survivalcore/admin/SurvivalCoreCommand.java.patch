@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/survivalcore/admin/SurvivalCoreCommand.java
-@@ -1,0 +_,605 @@
+@@ -1,0 +_,526 @@
 +package net.survivalcore.admin;
 +
 +import java.util.ArrayList;
@@ -42,7 +42,8 @@
 +    public SurvivalCoreCommand(final String name) {
 +        super(name);
 +        this.description = "SurvivalCore management commands";
-+        this.usageMessage = "/survivalcore <monitor|preset|reload|version|profile|lagspike|entity|chunks|entities>";
++        this.usageMessage = "/survivalcore <monitor|preset|reload|version|profile|lagspike>";
++        this.setAliases(List.of("sc"));
 +
 +        // Register all permissions
 +        final List<String> permissions = List.of(
@@ -52,17 +53,20 @@
 +            PermissionNodes.RELOAD,
 +            PermissionNodes.VERSION,
 +            PermissionNodes.PROFILE,
-+            PermissionNodes.LAGSPIKE,
-+            PermissionNodes.ENTITY,
-+            PermissionNodes.CHUNKS,
-+            PermissionNodes.ENTITIES
++            PermissionNodes.LAGSPIKE
 +        );
 +        this.setPermission(String.join(";", permissions));
 +
 +        // Add permissions to Bukkit with OP default
-+        final PluginManager pluginManager = Bukkit.getServer().getPluginManager();
-+        for (final String perm : permissions) {
-+            pluginManager.addPermission(new Permission(perm, PermissionDefault.OP));
++        try {
++            final PluginManager pluginManager = Bukkit.getServer().getPluginManager();
++            for (final String perm : permissions) {
++                if (pluginManager.getPermission(perm) == null) {
++                    pluginManager.addPermission(new Permission(perm, PermissionDefault.OP));
++                }
++            }
++        } catch (Exception e) {
++            // Permissions will still work via OP status even if registration fails
 +        }
 +    }
 +
@@ -72,6 +76,7 @@
 +     */
 +    public static void registerCommand(final MinecraftServer server) {
 +        server.server.getCommandMap().register("survivalcore", "SurvivalCore", new SurvivalCoreCommand("survivalcore"));
++        java.util.logging.Logger.getLogger("SurvivalCore").info("Registered /survivalcore command (aliases: /sc)");
 +    }
 +
 +    @Override
@@ -112,18 +117,6 @@
 +                if (!checkPermission(sender, PermissionNodes.LAGSPIKE)) return true;
 +                return executeLagspike(sender);
 +            }
-+            case "entity" -> {
-+                if (!checkPermission(sender, PermissionNodes.ENTITY)) return true;
-+                return executeEntity(sender, args);
-+            }
-+            case "chunks" -> {
-+                if (!checkPermission(sender, PermissionNodes.CHUNKS)) return true;
-+                return executeChunks(sender, args);
-+            }
-+            case "entities" -> {
-+                if (!checkPermission(sender, PermissionNodes.ENTITIES)) return true;
-+                return executeEntities(sender, args);
-+            }
 +            default -> {
 +                sender.sendMessage(
 +                    Component.text("Unknown subcommand: ", NamedTextColor.RED)
@@ -143,12 +136,12 @@
 +        final @Nullable Location location
 +    ) throws IllegalArgumentException {
 +        if (args.length == 0) {
-+            return List.of("monitor", "preset", "reload", "version", "profile", "lagspike", "entity", "chunks", "entities");
++            return List.of("monitor", "preset", "reload", "version", "profile", "lagspike");
 +        }
 +
 +        if (args.length == 1) {
 +            final String partial = args[0].toLowerCase(Locale.ENGLISH);
-+            return List.of("monitor", "preset", "reload", "version", "profile", "lagspike", "entity", "chunks", "entities").stream()
++            return List.of("monitor", "preset", "reload", "version", "profile", "lagspike").stream()
 +                .filter(cmd -> cmd.startsWith(partial))
 +                .toList();
 +        }
@@ -174,14 +167,6 @@
 +            return List.of("cpu", "memory", "tick").stream()
 +                .filter(type -> type.startsWith(partial))
 +                .toList();
-+        }
-+
-+        if (subcommand.equals("entity")) {
-+            return EntityCommands.tabComplete(sender, args);
-+        }
-+
-+        if (subcommand.equals("chunks") || subcommand.equals("entities")) {
-+            return PerformanceCommands.tabComplete(sender, args);
 +        }
 +
 +        return List.of();
@@ -487,66 +472,6 @@
 +        return true;
 +    }
 +
-+    /**
-+     * Execute /survivalcore entity [list|count|remove|freeze]
-+     */
-+    private boolean executeEntity(final CommandSender sender, final String[] args) {
-+        if (args.length < 2) {
-+            sender.sendMessage(
-+                Component.text("Usage: ", NamedTextColor.RED)
-+                    .append(Component.text("/survivalcore entity <list|count|remove|freeze>", NamedTextColor.GRAY))
-+            );
-+            return true;
-+        }
-+
-+        final String subcommand = args[1].toLowerCase(Locale.ENGLISH);
-+
-+        switch (subcommand) {
-+            case "list" -> EntityCommands.executeList(sender, args);
-+            case "count" -> EntityCommands.executeCount(sender, args);
-+            case "remove" -> EntityCommands.executeRemove(sender, args);
-+            case "freeze" -> EntityCommands.executeFreeze(sender, args);
-+            default -> sender.sendMessage(
-+                Component.text("Unknown entity subcommand: ", NamedTextColor.RED)
-+                    .append(Component.text(subcommand, NamedTextColor.GOLD))
-+            );
-+        }
-+
-+        return true;
-+    }
-+
-+    /**
-+     * Execute /survivalcore chunks top [n]
-+     */
-+    private boolean executeChunks(final CommandSender sender, final String[] args) {
-+        if (args.length < 2 || !args[1].equalsIgnoreCase("top")) {
-+            sender.sendMessage(
-+                Component.text("Usage: ", NamedTextColor.RED)
-+                    .append(Component.text("/survivalcore chunks top [n]", NamedTextColor.GRAY))
-+            );
-+            return true;
-+        }
-+
-+        PerformanceCommands.executeChunksTop(sender, args);
-+        return true;
-+    }
-+
-+    /**
-+     * Execute /survivalcore entities top [n]
-+     */
-+    private boolean executeEntities(final CommandSender sender, final String[] args) {
-+        if (args.length < 2 || !args[1].equalsIgnoreCase("top")) {
-+            sender.sendMessage(
-+                Component.text("Usage: ", NamedTextColor.RED)
-+                    .append(Component.text("/survivalcore entities top [n]", NamedTextColor.GRAY))
-+            );
-+            return true;
-+        }
-+
-+        PerformanceCommands.executeEntitiesTop(sender, args);
-+        return true;
-+    }
-+
 +    // ==================== Helper Methods ====================
 +
 +    /**
@@ -575,9 +500,6 @@
 +        sendCommandHelp(sender, "/survivalcore version", "Show version information");
 +        sendCommandHelp(sender, "/survivalcore profile <type>", "Start Spark profiler (cpu|tick|memory)");
 +        sendCommandHelp(sender, "/survivalcore lagspike", "View recent server lagspikes");
-+        sendCommandHelp(sender, "/survivalcore entity <sub>", "Manage entities (list|count|remove|freeze)");
-+        sendCommandHelp(sender, "/survivalcore chunks top [n]", "Show top N chunks by entity count");
-+        sendCommandHelp(sender, "/survivalcore entities top [n]", "Show top N entity types by count");
 +
 +        sender.sendMessage(Component.empty());
 +    }

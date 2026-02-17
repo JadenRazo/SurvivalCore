@@ -1,0 +1,334 @@
+--- /dev/null
++++ b/net/survivalcore/admin/commands/ChatCommands.java
+@@ -1,0 +_,331 @@
++package net.survivalcore.admin.commands;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.UUID;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.survivalcore.admin.AdminCommands;
++import net.survivalcore.admin.PermissionNodes;
++import org.bukkit.Bukkit;
++import org.bukkit.Location;
++import org.bukkit.command.Command;
++import org.bukkit.command.CommandSender;
++import org.bukkit.command.SimpleCommandMap;
++import org.bukkit.entity.Player;
++import org.checkerframework.checker.nullness.qual.NonNull;
++import org.checkerframework.checker.nullness.qual.Nullable;
++
++public final class ChatCommands {
++
++    private ChatCommands() {}
++
++    public static int register(final SimpleCommandMap map) {
++        map.register("survivalcore", muteCommand());
++        map.register("survivalcore", unmuteCommand());
++        map.register("survivalcore", warnCommand());
++        map.register("survivalcore", warningsCommand());
++        map.register("survivalcore", socialSpyCommand());
++        return 5;
++    }
++
++    private static Command muteCommand() {
++        return new Command("mute", "Mute a player", "/mute <player> [duration]", List.of()) {
++            {
++                setPermission(PermissionNodes.MUTE);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (args.length < 1) {
++                    sender.sendMessage(
++                        Component.text("Usage: ", NamedTextColor.RED)
++                            .append(Component.text("/mute <player> [duration]", NamedTextColor.GRAY))
++                    );
++                    return true;
++                }
++
++                final Player target = Bukkit.getPlayer(args[0]);
++                if (target == null) {
++                    sender.sendMessage(
++                        Component.text("Player not found: ", NamedTextColor.RED)
++                            .append(Component.text(args[0], NamedTextColor.GOLD))
++                    );
++                    return true;
++                }
++
++                final long expiryTime;
++                final String durationDisplay;
++
++                if (args.length > 1) {
++                    final long durationMillis = parseDuration(args[1]);
++                    if (durationMillis == -1L) {
++                        sender.sendMessage(Component.text("Invalid duration format. Use: 10s, 5m, 1h, 1d", NamedTextColor.RED));
++                        return true;
++                    }
++                    expiryTime = System.currentTimeMillis() + durationMillis;
++                    durationDisplay = " for " + args[1];
++                } else {
++                    expiryTime = -1L;
++                    durationDisplay = " permanently";
++                }
++
++                AdminCommands.getMutedPlayers().put(target.getUniqueId(), expiryTime);
++
++                target.sendMessage(
++                    Component.text("You have been muted" + durationDisplay + ".", NamedTextColor.RED)
++                );
++                sender.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Muted ", NamedTextColor.YELLOW))
++                        .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                        .append(Component.text(durationDisplay + ".", NamedTextColor.YELLOW))
++                );
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                if (args.length == 1) {
++                    return PlayerCommands.matchPlayers(args[0]);
++                }
++                if (args.length == 2) {
++                    return List.of("5m", "10m", "30m", "1h", "1d");
++                }
++                return List.of();
++            }
++        };
++    }
++
++    private static Command unmuteCommand() {
++        return new Command("unmute", "Unmute a player", "/unmute <player>", List.of()) {
++            {
++                setPermission(PermissionNodes.MUTE);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (args.length < 1) {
++                    sender.sendMessage(
++                        Component.text("Usage: ", NamedTextColor.RED)
++                            .append(Component.text("/unmute <player>", NamedTextColor.GRAY))
++                    );
++                    return true;
++                }
++
++                final Player target = Bukkit.getPlayer(args[0]);
++                if (target == null) {
++                    sender.sendMessage(
++                        Component.text("Player not found: ", NamedTextColor.RED)
++                            .append(Component.text(args[0], NamedTextColor.GOLD))
++                    );
++                    return true;
++                }
++
++                if (!AdminCommands.isMuted(target.getUniqueId())) {
++                    sender.sendMessage(Component.text("Player is not muted.", NamedTextColor.RED));
++                    return true;
++                }
++
++                AdminCommands.getMutedPlayers().remove(target.getUniqueId());
++
++                target.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("You have been unmuted.", NamedTextColor.YELLOW))
++                );
++                sender.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Unmuted ", NamedTextColor.YELLOW))
++                        .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                );
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? PlayerCommands.matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    private static Command warnCommand() {
++        return new Command("warn", "Issue a warning to a player", "/warn <player> <reason>", List.of()) {
++            {
++                setPermission(PermissionNodes.WARN);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (args.length < 2) {
++                    sender.sendMessage(
++                        Component.text("Usage: ", NamedTextColor.RED)
++                            .append(Component.text("/warn <player> <reason>", NamedTextColor.GRAY))
++                    );
++                    return true;
++                }
++
++                final Player target = Bukkit.getPlayer(args[0]);
++                if (target == null) {
++                    sender.sendMessage(
++                        Component.text("Player not found: ", NamedTextColor.RED)
++                            .append(Component.text(args[0], NamedTextColor.GOLD))
++                    );
++                    return true;
++                }
++
++                final String reason = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
++
++                AdminCommands.getWarnings()
++                    .computeIfAbsent(target.getUniqueId(), k -> new ArrayList<>())
++                    .add(reason);
++
++                target.sendMessage(
++                    Component.text("You have been warned: ", NamedTextColor.RED)
++                        .append(Component.text(reason, NamedTextColor.YELLOW))
++                );
++                sender.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Warned ", NamedTextColor.YELLOW))
++                        .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                        .append(Component.text(" for: ", NamedTextColor.YELLOW))
++                        .append(Component.text(reason, NamedTextColor.GRAY))
++                );
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? PlayerCommands.matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    private static Command warningsCommand() {
++        return new Command("warnings", "View a player's warnings", "/warnings <player>", List.of()) {
++            {
++                setPermission(PermissionNodes.WARN);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (args.length < 1) {
++                    sender.sendMessage(
++                        Component.text("Usage: ", NamedTextColor.RED)
++                            .append(Component.text("/warnings <player>", NamedTextColor.GRAY))
++                    );
++                    return true;
++                }
++
++                final Player target = Bukkit.getPlayer(args[0]);
++                if (target == null) {
++                    sender.sendMessage(
++                        Component.text("Player not found: ", NamedTextColor.RED)
++                            .append(Component.text(args[0], NamedTextColor.GOLD))
++                    );
++                    return true;
++                }
++
++                final List<String> warnings = AdminCommands.getWarnings().get(target.getUniqueId());
++                if (warnings == null || warnings.isEmpty()) {
++                    sender.sendMessage(Component.text("No warnings found.", NamedTextColor.YELLOW));
++                    return true;
++                }
++
++                sender.sendMessage(
++                    Component.text("Warnings for ", NamedTextColor.YELLOW)
++                        .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                        .append(Component.text(":", NamedTextColor.YELLOW))
++                );
++
++                for (int i = 0; i < warnings.size(); i++) {
++                    sender.sendMessage(
++                        Component.text("  " + (i + 1) + ". ", NamedTextColor.GRAY)
++                            .append(Component.text(warnings.get(i), NamedTextColor.WHITE))
++                    );
++                }
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? PlayerCommands.matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    private static Command socialSpyCommand() {
++        return new Command("socialspy", "Toggle social spy mode", "/socialspy", List.of()) {
++            {
++                setPermission(PermissionNodes.SOCIALSPY);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final UUID uuid = player.getUniqueId();
++                final boolean enabled;
++
++                if (AdminCommands.getSocialSpyPlayers().contains(uuid)) {
++                    AdminCommands.getSocialSpyPlayers().remove(uuid);
++                    enabled = false;
++                } else {
++                    AdminCommands.getSocialSpyPlayers().add(uuid);
++                    enabled = true;
++                }
++
++                player.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Social spy " + (enabled ? "enabled" : "disabled") + ".", NamedTextColor.YELLOW))
++                );
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return List.of();
++            }
++        };
++    }
++
++    // ==================== Helpers ====================
++
++    /**
++     * Parse duration string (e.g., "10s", "5m", "1h", "1d") to milliseconds.
++     * Returns -1 if invalid format.
++     */
++    private static long parseDuration(final String input) {
++        if (input == null || input.isEmpty()) return -1L;
++
++        final char unit = input.charAt(input.length() - 1);
++        final String numberPart = input.substring(0, input.length() - 1);
++
++        final long value;
++        try {
++            value = Long.parseLong(numberPart);
++        } catch (NumberFormatException e) {
++            return -1L;
++        }
++
++        return switch (unit) {
++            case 's', 'S' -> value * 1000L;
++            case 'm', 'M' -> value * 60L * 1000L;
++            case 'h', 'H' -> value * 60L * 60L * 1000L;
++            case 'd', 'D' -> value * 24L * 60L * 60L * 1000L;
++            default -> -1L;
++        };
++    }
++}

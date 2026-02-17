@@ -1,0 +1,148 @@
+--- /dev/null
++++ b/net/survivalcore/admin/commands/TeleportCommands.java
+@@ -1,0 +_,145 @@
++package net.survivalcore.admin.commands;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.UUID;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.survivalcore.admin.AdminCommands;
++import net.survivalcore.admin.PermissionNodes;
++import org.bukkit.Bukkit;
++import org.bukkit.Location;
++import org.bukkit.block.Block;
++import org.bukkit.command.Command;
++import org.bukkit.command.CommandSender;
++import org.bukkit.command.SimpleCommandMap;
++import org.bukkit.entity.Player;
++import org.checkerframework.checker.nullness.qual.NonNull;
++import org.checkerframework.checker.nullness.qual.Nullable;
++
++public final class TeleportCommands {
++
++    private TeleportCommands() {}
++
++    public static int register(final SimpleCommandMap map) {
++        map.register("survivalcore", tphereCommand());
++        map.register("survivalcore", topCommand());
++        map.register("survivalcore", backCommand());
++        return 3;
++    }
++
++    private static Command tphereCommand() {
++        return new Command("tphere", "Teleport a player to you", "/tphere <player>", List.of("s2m")) {
++            {
++                setPermission(PermissionNodes.TPHERE);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                if (args.length < 1) {
++                    sender.sendMessage(
++                        Component.text("Usage: ", NamedTextColor.RED)
++                            .append(Component.text("/tphere <player>", NamedTextColor.GRAY))
++                    );
++                    return true;
++                }
++
++                final Player target = Bukkit.getPlayer(args[0]);
++                if (target == null) {
++                    sender.sendMessage(
++                        Component.text("Player not found: ", NamedTextColor.RED)
++                            .append(Component.text(args[0], NamedTextColor.GOLD))
++                    );
++                    return true;
++                }
++
++                target.teleport(player.getLocation());
++                sender.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Teleported ", NamedTextColor.YELLOW))
++                        .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                        .append(Component.text(" to you.", NamedTextColor.YELLOW))
++                );
++                target.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Teleported to ", NamedTextColor.YELLOW))
++                        .append(Component.text(player.getName(), NamedTextColor.GOLD))
++                );
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? PlayerCommands.matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    private static Command topCommand() {
++        return new Command("top", "Teleport to the highest block", "/top", List.of()) {
++            {
++                setPermission(PermissionNodes.TOP);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final Block highest = player.getWorld().getHighestBlockAt(player.getLocation());
++                final Location topLoc = highest.getLocation().add(0.5, 1, 0.5);
++                topLoc.setYaw(player.getLocation().getYaw());
++                topLoc.setPitch(player.getLocation().getPitch());
++
++                player.teleport(topLoc);
++                sender.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Teleported to the top.", NamedTextColor.YELLOW))
++                );
++                return true;
++            }
++        };
++    }
++
++    private static Command backCommand() {
++        return new Command("back", "Return to your previous location", "/back", List.of()) {
++            {
++                setPermission(PermissionNodes.BACK);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final Location lastLoc = AdminCommands.getBackLocations().get(player.getUniqueId());
++                if (lastLoc == null) {
++                    sender.sendMessage(Component.text("No previous location found.", NamedTextColor.RED));
++                    return true;
++                }
++
++                player.teleport(lastLoc);
++                sender.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Teleported to your previous location.", NamedTextColor.YELLOW))
++                );
++                return true;
++            }
++        };
++    }
++}

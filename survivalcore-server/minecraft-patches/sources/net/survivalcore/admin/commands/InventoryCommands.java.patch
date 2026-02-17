@@ -1,0 +1,244 @@
+--- /dev/null
++++ b/net/survivalcore/admin/commands/InventoryCommands.java
+@@ -1,0 +_,241 @@
++package net.survivalcore.admin.commands;
++
++import java.util.List;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.survivalcore.admin.PermissionNodes;
++import org.bukkit.Bukkit;
++import org.bukkit.Location;
++import org.bukkit.Material;
++import org.bukkit.command.Command;
++import org.bukkit.command.CommandSender;
++import org.bukkit.command.SimpleCommandMap;
++import org.bukkit.entity.Player;
++import org.bukkit.inventory.Inventory;
++import org.bukkit.inventory.ItemStack;
++import org.bukkit.inventory.meta.Damageable;
++import org.bukkit.inventory.meta.SkullMeta;
++import org.checkerframework.checker.nullness.qual.NonNull;
++import org.checkerframework.checker.nullness.qual.Nullable;
++
++public final class InventoryCommands {
++
++    private InventoryCommands() {}
++
++    public static int register(final SimpleCommandMap map) {
++        map.register("survivalcore", repairCommand());
++        map.register("survivalcore", moreCommand());
++        map.register("survivalcore", hatCommand());
++        map.register("survivalcore", skullCommand());
++        map.register("survivalcore", workbenchCommand());
++        map.register("survivalcore", disposalCommand());
++        return 6;
++    }
++
++    private static Command repairCommand() {
++        return new Command("repair", "Repair the item in your hand", "/repair", List.of("fix")) {
++            {
++                setPermission(PermissionNodes.REPAIR);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final ItemStack item = player.getInventory().getItemInMainHand();
++                if (item.getType() == Material.AIR) {
++                    sender.sendMessage(Component.text("You must hold an item to repair it.", NamedTextColor.RED));
++                    return true;
++                }
++
++                if (item.getType().getMaxDurability() <= 0) {
++                    sender.sendMessage(Component.text("This item cannot be repaired.", NamedTextColor.RED));
++                    return true;
++                }
++
++                if (item.getItemMeta() instanceof Damageable damageable) {
++                    damageable.setDamage(0);
++                    item.setItemMeta(damageable);
++                    player.sendMessage(
++                        Component.text("✓ ", NamedTextColor.GREEN)
++                            .append(Component.text("Item repaired.", NamedTextColor.YELLOW))
++                    );
++                } else {
++                    sender.sendMessage(Component.text("This item cannot be repaired.", NamedTextColor.RED));
++                }
++
++                return true;
++            }
++        };
++    }
++
++    private static Command moreCommand() {
++        return new Command("more", "Fill the held item stack to max size", "/more", List.of()) {
++            {
++                setPermission(PermissionNodes.MORE);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final ItemStack item = player.getInventory().getItemInMainHand();
++                if (item.getType() == Material.AIR) {
++                    sender.sendMessage(Component.text("You must hold an item.", NamedTextColor.RED));
++                    return true;
++                }
++
++                item.setAmount(item.getMaxStackSize());
++                player.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Item stack filled to maximum.", NamedTextColor.YELLOW))
++                );
++
++                return true;
++            }
++        };
++    }
++
++    private static Command hatCommand() {
++        return new Command("hat", "Put the held item on your head", "/hat", List.of()) {
++            {
++                setPermission(PermissionNodes.HAT);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final ItemStack item = player.getInventory().getItemInMainHand();
++                if (item.getType() == Material.AIR) {
++                    sender.sendMessage(Component.text("You must hold an item.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final ItemStack currentHelmet = player.getInventory().getHelmet();
++                player.getInventory().setHelmet(item.clone());
++                player.getInventory().setItemInMainHand(null);
++
++                if (currentHelmet != null && currentHelmet.getType() != Material.AIR) {
++                    player.getInventory().setItemInMainHand(currentHelmet);
++                }
++
++                player.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Item placed on head.", NamedTextColor.YELLOW))
++                );
++
++                return true;
++            }
++        };
++    }
++
++    private static Command skullCommand() {
++        return new Command("skull", "Get a player head", "/skull [player]", List.of()) {
++            {
++                setPermission(PermissionNodes.SKULL);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final String targetName = args.length > 0 ? args[0] : player.getName();
++
++                final ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
++                if (skull.getItemMeta() instanceof SkullMeta skullMeta) {
++                    skullMeta.setOwningPlayer(Bukkit.getOfflinePlayer(targetName));
++                    skull.setItemMeta(skullMeta);
++                }
++
++                player.getInventory().addItem(skull);
++                player.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Received ", NamedTextColor.YELLOW))
++                        .append(Component.text(targetName, NamedTextColor.GOLD))
++                        .append(Component.text("'s skull.", NamedTextColor.YELLOW))
++                );
++
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? PlayerCommands.matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    private static Command workbenchCommand() {
++        return new Command("workbench", "Open a crafting table", "/workbench", List.of("wb", "craft")) {
++            {
++                setPermission(PermissionNodes.WORKBENCH);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                player.openWorkbench(player.getLocation(), true);
++                player.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Opened crafting table.", NamedTextColor.YELLOW))
++                );
++
++                return true;
++            }
++        };
++    }
++
++    private static Command disposalCommand() {
++        return new Command("disposal", "Open a disposal inventory", "/disposal", List.of("trash", "bin")) {
++            {
++                setPermission(PermissionNodes.DISPOSAL);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final Inventory disposal = Bukkit.createInventory(null, 54, Component.text("Disposal", NamedTextColor.RED));
++                player.openInventory(disposal);
++                player.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Opened disposal.", NamedTextColor.YELLOW))
++                );
++
++                return true;
++            }
++        };
++    }
++}

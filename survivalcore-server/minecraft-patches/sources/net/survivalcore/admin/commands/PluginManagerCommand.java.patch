@@ -1,0 +1,805 @@
+--- /dev/null
++++ b/net/survivalcore/admin/commands/PluginManagerCommand.java
+@@ -1,0 +_,802 @@
++package net.survivalcore.admin.commands;
++
++import java.io.File;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.Comparator;
++import java.util.Iterator;
++import java.util.List;
++import java.util.Map;
++import java.util.stream.Collectors;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.kyori.adventure.text.format.TextDecoration;
++import net.survivalcore.admin.PermissionNodes;
++import org.bukkit.Bukkit;
++import org.bukkit.command.Command;
++import org.bukkit.command.CommandSender;
++import org.bukkit.command.PluginCommand;
++import org.bukkit.command.SimpleCommandMap;
++import org.bukkit.craftbukkit.CraftServer;
++import org.bukkit.entity.Player;
++import org.bukkit.plugin.Plugin;
++import org.bukkit.plugin.PluginDescriptionFile;
++import org.bukkit.plugin.java.JavaPlugin;
++import org.checkerframework.checker.nullness.qual.NonNull;
++import org.jetbrains.annotations.NotNull;
++
++public final class PluginManagerCommand extends Command {
++
++    public PluginManagerCommand(final String name) {
++        super(name);
++        this.description = "Advanced plugin manager";
++        this.usageMessage = "/plugman <help|list|info|enable|disable|restart|load|unload|reload|usage|lookup|dump>";
++        this.setAliases(List.of("plm"));
++        this.setPermission(PermissionNodes.PLUGMAN);
++    }
++
++    @Override
++    public boolean execute(@NonNull CommandSender sender, @NonNull String commandLabel, @NonNull String[] args) {
++        if (!checkPerm(sender, PermissionNodes.PLUGMAN)) {
++            return true;
++        }
++
++        if (args.length == 0) {
++            return executeHelp(sender);
++        }
++
++        String subcommand = args[0].toLowerCase();
++        return switch (subcommand) {
++            case "help" -> executeHelp(sender);
++            case "list", "l" -> executeList(sender, args);
++            case "info", "i" -> executeInfo(sender, args);
++            case "enable", "e" -> executeEnable(sender, args);
++            case "disable", "d" -> executeDisable(sender, args);
++            case "restart", "r" -> executeRestart(sender, args);
++            case "load" -> executeLoad(sender, args);
++            case "unload", "u" -> executeUnload(sender, args);
++            case "reload", "rl" -> executeReload(sender, args);
++            case "usage" -> executeUsage(sender, args);
++            case "lookup" -> executeLookup(sender, args);
++            case "dump" -> executeDump(sender);
++            default -> {
++                sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                    .append(Component.text("Unknown subcommand. Use ", NamedTextColor.YELLOW))
++                    .append(Component.text("/plugman help", NamedTextColor.GOLD)));
++                yield true;
++            }
++        };
++    }
++
++    @Override
++    public @NotNull List<String> tabComplete(@NonNull CommandSender sender, @NonNull String alias, @NonNull String[] args) {
++        if (!sender.hasPermission(PermissionNodes.PLUGMAN)) {
++            return List.of();
++        }
++
++        if (args.length == 1) {
++            return Arrays.asList("help", "list", "info", "enable", "disable", "restart", "load", "unload", "reload", "usage", "lookup", "dump")
++                .stream()
++                .filter(s -> s.startsWith(args[0].toLowerCase()))
++                .collect(Collectors.toList());
++        }
++
++        if (args.length == 2) {
++            String subcommand = args[0].toLowerCase();
++            return switch (subcommand) {
++                case "load" -> getUnloadedJars(args[1]);
++                case "enable", "e" -> getPluginNames(false, args[1]);
++                case "disable", "d" -> getPluginNames(true, args[1]);
++                case "info", "i", "unload", "u", "reload", "rl", "usage" -> getAllPluginNames(args[1]);
++                case "restart", "r" -> {
++                    List<String> options = new ArrayList<>(getAllPluginNames(args[1]));
++                    options.add(0, "all");
++                    yield options;
++                }
++                case "lookup" -> getCommandNames(args[1]);
++                default -> List.of();
++            };
++        }
++
++        return List.of();
++    }
++
++    private boolean executeHelp(CommandSender sender) {
++        sender.sendMessage(Component.text("═══════════════════════════════════════", NamedTextColor.DARK_GRAY));
++        sender.sendMessage(Component.text("PluginManager Commands", NamedTextColor.GOLD, TextDecoration.BOLD));
++        sender.sendMessage(Component.text("═══════════════════════════════════════", NamedTextColor.DARK_GRAY));
++
++        sendHelpLine(sender, "/plugman list [-v]", "List all plugins");
++        sendHelpLine(sender, "/plugman info <plugin>", "Show plugin details");
++        sendHelpLine(sender, "/plugman enable <plugin|all>", "Enable a plugin");
++        sendHelpLine(sender, "/plugman disable <plugin|all>", "Disable a plugin");
++        sendHelpLine(sender, "/plugman restart <plugin|all>", "Restart a plugin");
++        sendHelpLine(sender, "/plugman load <file>", "Load a plugin JAR");
++        sendHelpLine(sender, "/plugman unload <plugin>", "Fully unload a plugin");
++        sendHelpLine(sender, "/plugman reload <plugin|all>", "Reload a plugin");
++        sendHelpLine(sender, "/plugman usage <plugin>", "List plugin commands");
++        sendHelpLine(sender, "/plugman lookup <command>", "Find command owner");
++        sendHelpLine(sender, "/plugman dump", "Export plugin list");
++
++        sender.sendMessage(Component.text("═══════════════════════════════════════", NamedTextColor.DARK_GRAY));
++        return true;
++    }
++
++    private void sendHelpLine(CommandSender sender, String command, String description) {
++        sender.sendMessage(Component.text("  ", NamedTextColor.GRAY)
++            .append(Component.text(command, NamedTextColor.AQUA))
++            .append(Component.text(" - ", NamedTextColor.DARK_GRAY))
++            .append(Component.text(description, NamedTextColor.GRAY)));
++    }
++
++    private boolean executeList(CommandSender sender, String[] args) {
++        if (!checkPerm(sender, PermissionNodes.PLUGMAN_LIST)) return true;
++
++        boolean verbose = args.length > 1 && args[1].equalsIgnoreCase("-v");
++        Plugin[] plugins = Bukkit.getPluginManager().getPlugins();
++        Arrays.sort(plugins, Comparator.comparing(Plugin::getName));
++
++        sender.sendMessage(Component.text("Plugins (", NamedTextColor.GRAY)
++            .append(Component.text(plugins.length, NamedTextColor.GOLD))
++            .append(Component.text("): ", NamedTextColor.GRAY)));
++
++        for (int i = 0; i < plugins.length; i++) {
++            Plugin plugin = plugins[i];
++            NamedTextColor color = plugin.isEnabled() ? NamedTextColor.GREEN : NamedTextColor.RED;
++
++            Component pluginComponent = Component.text(plugin.getName(), color);
++            if (verbose) {
++                pluginComponent = pluginComponent.append(Component.text(" v" + plugin.getPluginMeta().getVersion(), NamedTextColor.GRAY));
++            }
++
++            if (i < plugins.length - 1) {
++                pluginComponent = pluginComponent.append(Component.text(", ", NamedTextColor.DARK_GRAY));
++            }
++
++            sender.sendMessage(pluginComponent);
++        }
++
++        return true;
++    }
++
++    private boolean executeInfo(CommandSender sender, String[] args) {
++        if (!checkPerm(sender, PermissionNodes.PLUGMAN_INFO)) return true;
++        if (args.length < 2) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Usage: /plugman info <plugin>", NamedTextColor.YELLOW)));
++            return true;
++        }
++
++        Plugin plugin = Bukkit.getPluginManager().getPlugin(args[1]);
++        if (plugin == null) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Plugin not found: ", NamedTextColor.YELLOW))
++                .append(Component.text(args[1], NamedTextColor.GOLD)));
++            return true;
++        }
++
++        PluginDescriptionFile desc = plugin.getDescription();
++
++        sender.sendMessage(Component.text("═══════════════════════════════════════", NamedTextColor.DARK_GRAY));
++        sender.sendMessage(Component.text(plugin.getName(), NamedTextColor.GOLD, TextDecoration.BOLD));
++        sender.sendMessage(Component.text("═══════════════════════════════════════", NamedTextColor.DARK_GRAY));
++
++        sendInfoLine(sender, "Version", desc.getVersion());
++        sendInfoLine(sender, "Status", plugin.isEnabled() ? "Enabled" : "Disabled");
++
++        if (!desc.getAuthors().isEmpty()) {
++            sendInfoLine(sender, "Authors", String.join(", ", desc.getAuthors()));
++        }
++
++        if (!desc.getDepend().isEmpty()) {
++            sendInfoLine(sender, "Dependencies", String.join(", ", desc.getDepend()));
++        }
++
++        if (!desc.getSoftDepend().isEmpty()) {
++            sendInfoLine(sender, "Soft Dependencies", String.join(", ", desc.getSoftDepend()));
++        }
++
++        String description = desc.getDescription();
++        if (description != null && !description.isEmpty()) {
++            sendInfoLine(sender, "Description", description);
++        }
++
++        sender.sendMessage(Component.text("═══════════════════════════════════════", NamedTextColor.DARK_GRAY));
++        return true;
++    }
++
++    private void sendInfoLine(CommandSender sender, String label, String value) {
++        sender.sendMessage(Component.text("  ", NamedTextColor.GRAY)
++            .append(Component.text(label + ": ", NamedTextColor.GRAY))
++            .append(Component.text(value, NamedTextColor.WHITE)));
++    }
++
++    private boolean executeEnable(CommandSender sender, String[] args) {
++        if (!checkPerm(sender, PermissionNodes.PLUGMAN_ENABLE)) return true;
++        if (args.length < 2) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Usage: /plugman enable <plugin|all>", NamedTextColor.YELLOW)));
++            return true;
++        }
++
++        if (args[1].equalsIgnoreCase("all")) {
++            int count = 0;
++            for (Plugin plugin : Bukkit.getPluginManager().getPlugins()) {
++                if (!plugin.isEnabled()) {
++                    Bukkit.getPluginManager().enablePlugin(plugin);
++                    count++;
++                }
++            }
++            sender.sendMessage(Component.text("✓ ", NamedTextColor.GREEN)
++                .append(Component.text("Enabled ", NamedTextColor.YELLOW))
++                .append(Component.text(count, NamedTextColor.GOLD))
++                .append(Component.text(" plugin(s)", NamedTextColor.YELLOW)));
++            return true;
++        }
++
++        Plugin plugin = Bukkit.getPluginManager().getPlugin(args[1]);
++        if (plugin == null) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Plugin not found: ", NamedTextColor.YELLOW))
++                .append(Component.text(args[1], NamedTextColor.GOLD)));
++            return true;
++        }
++
++        if (plugin.isEnabled()) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Plugin is already enabled: ", NamedTextColor.YELLOW))
++                .append(Component.text(plugin.getName(), NamedTextColor.GOLD)));
++            return true;
++        }
++
++        Bukkit.getPluginManager().enablePlugin(plugin);
++        sender.sendMessage(Component.text("✓ ", NamedTextColor.GREEN)
++            .append(Component.text("Enabled ", NamedTextColor.YELLOW))
++            .append(Component.text(plugin.getName(), NamedTextColor.GOLD)));
++        return true;
++    }
++
++    private boolean executeDisable(CommandSender sender, String[] args) {
++        if (!checkPerm(sender, PermissionNodes.PLUGMAN_DISABLE)) return true;
++        if (args.length < 2) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Usage: /plugman disable <plugin|all>", NamedTextColor.YELLOW)));
++            return true;
++        }
++
++        if (args[1].equalsIgnoreCase("all")) {
++            int count = 0;
++            for (Plugin plugin : Bukkit.getPluginManager().getPlugins()) {
++                if (plugin.isEnabled()) {
++                    Bukkit.getPluginManager().disablePlugin(plugin);
++                    count++;
++                }
++            }
++            sender.sendMessage(Component.text("✓ ", NamedTextColor.GREEN)
++                .append(Component.text("Disabled ", NamedTextColor.YELLOW))
++                .append(Component.text(count, NamedTextColor.GOLD))
++                .append(Component.text(" plugin(s)", NamedTextColor.YELLOW)));
++            return true;
++        }
++
++        Plugin plugin = Bukkit.getPluginManager().getPlugin(args[1]);
++        if (plugin == null) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Plugin not found: ", NamedTextColor.YELLOW))
++                .append(Component.text(args[1], NamedTextColor.GOLD)));
++            return true;
++        }
++
++        if (!plugin.isEnabled()) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Plugin is already disabled: ", NamedTextColor.YELLOW))
++                .append(Component.text(plugin.getName(), NamedTextColor.GOLD)));
++            return true;
++        }
++
++        Bukkit.getPluginManager().disablePlugin(plugin);
++        sender.sendMessage(Component.text("✓ ", NamedTextColor.GREEN)
++            .append(Component.text("Disabled ", NamedTextColor.YELLOW))
++            .append(Component.text(plugin.getName(), NamedTextColor.GOLD)));
++        return true;
++    }
++
++    private boolean executeRestart(CommandSender sender, String[] args) {
++        if (!checkPerm(sender, PermissionNodes.PLUGMAN_RESTART)) return true;
++        if (args.length < 2) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Usage: /plugman restart <plugin|all>", NamedTextColor.YELLOW)));
++            return true;
++        }
++
++        if (args[1].equalsIgnoreCase("all")) {
++            Plugin[] plugins = Bukkit.getPluginManager().getPlugins();
++
++            // Disable all
++            for (Plugin plugin : plugins) {
++                if (plugin.isEnabled()) {
++                    Bukkit.getPluginManager().disablePlugin(plugin);
++                }
++            }
++
++            // Enable all
++            for (Plugin plugin : plugins) {
++                if (!plugin.isEnabled()) {
++                    Bukkit.getPluginManager().enablePlugin(plugin);
++                }
++            }
++
++            sender.sendMessage(Component.text("✓ ", NamedTextColor.GREEN)
++                .append(Component.text("Restarted all plugins", NamedTextColor.YELLOW)));
++            return true;
++        }
++
++        Plugin plugin = Bukkit.getPluginManager().getPlugin(args[1]);
++        if (plugin == null) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Plugin not found: ", NamedTextColor.YELLOW))
++                .append(Component.text(args[1], NamedTextColor.GOLD)));
++            return true;
++        }
++
++        boolean wasEnabled = plugin.isEnabled();
++        if (wasEnabled) {
++            Bukkit.getPluginManager().disablePlugin(plugin);
++        }
++        Bukkit.getPluginManager().enablePlugin(plugin);
++
++        sender.sendMessage(Component.text("✓ ", NamedTextColor.GREEN)
++            .append(Component.text("Restarted ", NamedTextColor.YELLOW))
++            .append(Component.text(plugin.getName(), NamedTextColor.GOLD)));
++        return true;
++    }
++
++    private boolean executeLoad(CommandSender sender, String[] args) {
++        if (!checkPerm(sender, PermissionNodes.PLUGMAN_LOAD)) return true;
++        if (args.length < 2) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Usage: /plugman load <file>", NamedTextColor.YELLOW)));
++            return true;
++        }
++
++        String fileName = args[1].replace("/", "").replace("\\", "");
++        if (!fileName.endsWith(".jar")) {
++            fileName += ".jar";
++        }
++
++        File pluginsDir = new File("plugins");
++        File jarFile = new File(pluginsDir, fileName);
++
++        if (!jarFile.exists()) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("File not found: ", NamedTextColor.YELLOW))
++                .append(Component.text(fileName, NamedTextColor.GOLD)));
++            return true;
++        }
++
++        try {
++            Plugin loaded = Bukkit.getPluginManager().loadPlugin(jarFile);
++            if (loaded == null) {
++                sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                    .append(Component.text("Failed to load plugin. Check console for errors.", NamedTextColor.YELLOW)));
++                return true;
++            }
++
++            loaded.onLoad();
++            Bukkit.getPluginManager().enablePlugin(loaded);
++
++            // Sync commands
++            ((CraftServer) Bukkit.getServer()).syncCommands();
++
++            sender.sendMessage(Component.text("✓ ", NamedTextColor.GREEN)
++                .append(Component.text("Loaded and enabled ", NamedTextColor.YELLOW))
++                .append(Component.text(loaded.getName(), NamedTextColor.GOLD)));
++        } catch (Exception e) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Failed to load: ", NamedTextColor.YELLOW))
++                .append(Component.text(e.getMessage(), NamedTextColor.GOLD)));
++        }
++        return true;
++    }
++
++    private boolean executeUnload(CommandSender sender, String[] args) {
++        if (!checkPerm(sender, PermissionNodes.PLUGMAN_UNLOAD)) return true;
++        if (args.length < 2) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Usage: /plugman unload <plugin>", NamedTextColor.YELLOW)));
++            return true;
++        }
++
++        Plugin plugin = Bukkit.getPluginManager().getPlugin(args[1]);
++        if (plugin == null) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Plugin not found: ", NamedTextColor.YELLOW))
++                .append(Component.text(args[1], NamedTextColor.GOLD)));
++            return true;
++        }
++
++        String pluginName = plugin.getName();
++
++        // 1. Disable the plugin
++        if (plugin.isEnabled()) {
++            Bukkit.getPluginManager().disablePlugin(plugin);
++        }
++
++        // 2. Remove plugin commands from the command map
++        CraftServer craftServer = (CraftServer) Bukkit.getServer();
++        SimpleCommandMap commandMap = craftServer.getCommandMap();
++        Map<String, Command> knownCommands = commandMap.getKnownCommands();
++
++        Iterator<Map.Entry<String, Command>> it = knownCommands.entrySet().iterator();
++        while (it.hasNext()) {
++            Map.Entry<String, Command> entry = it.next();
++            Command cmd = entry.getValue();
++
++            if (cmd instanceof PluginCommand pluginCmd) {
++                if (pluginCmd.getPlugin().equals(plugin)) {
++                    cmd.unregister(commandMap);
++                    it.remove();
++                }
++            } else {
++                String key = entry.getKey();
++                if (key.toLowerCase().startsWith(pluginName.toLowerCase() + ":")) {
++                    cmd.unregister(commandMap);
++                    it.remove();
++                }
++            }
++        }
++
++        // 3. Remove from Paper's internal plugin lists
++        try {
++            java.lang.reflect.Field instanceManagerField = Bukkit.getPluginManager().getClass().getDeclaredField("instanceManager");
++            instanceManagerField.setAccessible(true);
++            Object instanceManager = instanceManagerField.get(Bukkit.getPluginManager());
++
++            java.lang.reflect.Field pluginsField = instanceManager.getClass().getDeclaredField("plugins");
++            pluginsField.setAccessible(true);
++            @SuppressWarnings("unchecked")
++            List<Plugin> plugins = (List<Plugin>) pluginsField.get(instanceManager);
++            plugins.remove(plugin);
++
++            java.lang.reflect.Field lookupField = instanceManager.getClass().getDeclaredField("lookupNames");
++            lookupField.setAccessible(true);
++            @SuppressWarnings("unchecked")
++            Map<String, Plugin> lookupNames = (Map<String, Plugin>) lookupField.get(instanceManager);
++            lookupNames.values().removeIf(p -> p.equals(plugin));
++        } catch (Exception e) {
++            sender.sendMessage(Component.text("⚠ ", NamedTextColor.YELLOW)
++                .append(Component.text("Could not fully clean up plugin internals: ", NamedTextColor.GRAY))
++                .append(Component.text(e.getMessage(), NamedTextColor.GOLD)));
++        }
++
++        // 4. Sync commands
++        craftServer.syncCommands();
++        for (Player online : Bukkit.getOnlinePlayers()) {
++            online.updateCommands();
++        }
++
++        // 5. Suggest GC
++        System.gc();
++
++        sender.sendMessage(Component.text("✓ ", NamedTextColor.GREEN)
++            .append(Component.text("Unloaded ", NamedTextColor.YELLOW))
++            .append(Component.text(pluginName, NamedTextColor.GOLD)));
++        return true;
++    }
++
++    private boolean executeReload(CommandSender sender, String[] args) {
++        if (!checkPerm(sender, PermissionNodes.PLUGMAN_RELOAD)) return true;
++        if (args.length < 2) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Usage: /plugman reload <plugin|all>", NamedTextColor.YELLOW)));
++            return true;
++        }
++
++        if (args[1].equalsIgnoreCase("all")) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Reloading all plugins is not supported. Use 'restart all' instead.", NamedTextColor.YELLOW)));
++            return true;
++        }
++
++        Plugin plugin = Bukkit.getPluginManager().getPlugin(args[1]);
++        if (plugin == null) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Plugin not found: ", NamedTextColor.YELLOW))
++                .append(Component.text(args[1], NamedTextColor.GOLD)));
++            return true;
++        }
++
++        // Get plugin file before unloading
++        File pluginFile;
++        try {
++            if (plugin instanceof JavaPlugin javaPlugin) {
++                java.lang.reflect.Method getFileMethod = JavaPlugin.class.getDeclaredMethod("getFile");
++                getFileMethod.setAccessible(true);
++                pluginFile = (File) getFileMethod.invoke(javaPlugin);
++            } else {
++                sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                    .append(Component.text("Cannot reload non-JavaPlugin: ", NamedTextColor.YELLOW))
++                    .append(Component.text(plugin.getName(), NamedTextColor.GOLD)));
++                return true;
++            }
++        } catch (Exception e) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Could not locate plugin JAR file: ", NamedTextColor.YELLOW))
++                .append(Component.text(e.getMessage(), NamedTextColor.GOLD)));
++            return true;
++        }
++
++        String pluginName = plugin.getName();
++
++        // Unload
++        if (plugin.isEnabled()) {
++            Bukkit.getPluginManager().disablePlugin(plugin);
++        }
++
++        CraftServer craftServer = (CraftServer) Bukkit.getServer();
++        SimpleCommandMap commandMap = craftServer.getCommandMap();
++        Map<String, Command> knownCommands = commandMap.getKnownCommands();
++
++        Iterator<Map.Entry<String, Command>> it = knownCommands.entrySet().iterator();
++        while (it.hasNext()) {
++            Map.Entry<String, Command> entry = it.next();
++            Command cmd = entry.getValue();
++
++            if (cmd instanceof PluginCommand pluginCmd) {
++                if (pluginCmd.getPlugin().equals(plugin)) {
++                    cmd.unregister(commandMap);
++                    it.remove();
++                }
++            } else {
++                String key = entry.getKey();
++                if (key.toLowerCase().startsWith(pluginName.toLowerCase() + ":")) {
++                    cmd.unregister(commandMap);
++                    it.remove();
++                }
++            }
++        }
++
++        try {
++            java.lang.reflect.Field instanceManagerField = Bukkit.getPluginManager().getClass().getDeclaredField("instanceManager");
++            instanceManagerField.setAccessible(true);
++            Object instanceManager = instanceManagerField.get(Bukkit.getPluginManager());
++
++            java.lang.reflect.Field pluginsField = instanceManager.getClass().getDeclaredField("plugins");
++            pluginsField.setAccessible(true);
++            @SuppressWarnings("unchecked")
++            List<Plugin> plugins = (List<Plugin>) pluginsField.get(instanceManager);
++            plugins.remove(plugin);
++
++            java.lang.reflect.Field lookupField = instanceManager.getClass().getDeclaredField("lookupNames");
++            lookupField.setAccessible(true);
++            @SuppressWarnings("unchecked")
++            Map<String, Plugin> lookupNames = (Map<String, Plugin>) lookupField.get(instanceManager);
++            lookupNames.values().removeIf(p -> p.equals(plugin));
++        } catch (Exception e) {
++            sender.sendMessage(Component.text("⚠ ", NamedTextColor.YELLOW)
++                .append(Component.text("Warning during unload: ", NamedTextColor.GRAY))
++                .append(Component.text(e.getMessage(), NamedTextColor.GOLD)));
++        }
++
++        System.gc();
++
++        // Load
++        try {
++            Plugin loaded = Bukkit.getPluginManager().loadPlugin(pluginFile);
++            if (loaded == null) {
++                sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                    .append(Component.text("Failed to reload plugin. Check console for errors.", NamedTextColor.YELLOW)));
++                return true;
++            }
++
++            loaded.onLoad();
++            Bukkit.getPluginManager().enablePlugin(loaded);
++            craftServer.syncCommands();
++
++            sender.sendMessage(Component.text("✓ ", NamedTextColor.GREEN)
++                .append(Component.text("Reloaded ", NamedTextColor.YELLOW))
++                .append(Component.text(loaded.getName(), NamedTextColor.GOLD)));
++        } catch (Exception e) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Failed to reload: ", NamedTextColor.YELLOW))
++                .append(Component.text(e.getMessage(), NamedTextColor.GOLD)));
++        }
++
++        return true;
++    }
++
++    private boolean executeUsage(CommandSender sender, String[] args) {
++        if (!checkPerm(sender, PermissionNodes.PLUGMAN_USAGE)) return true;
++        if (args.length < 2) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Usage: /plugman usage <plugin>", NamedTextColor.YELLOW)));
++            return true;
++        }
++
++        Plugin plugin = Bukkit.getPluginManager().getPlugin(args[1]);
++        if (plugin == null) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Plugin not found: ", NamedTextColor.YELLOW))
++                .append(Component.text(args[1], NamedTextColor.GOLD)));
++            return true;
++        }
++
++        SimpleCommandMap commandMap = ((CraftServer) Bukkit.getServer()).getCommandMap();
++        Map<String, Command> knownCommands = commandMap.getKnownCommands();
++
++        List<String> pluginCommands = new ArrayList<>();
++        for (Map.Entry<String, Command> entry : knownCommands.entrySet()) {
++            String key = entry.getKey();
++            Command cmd = entry.getValue();
++
++            if (key.contains(":")) continue;
++
++            if (cmd instanceof PluginCommand pc && pc.getPlugin().equals(plugin)) {
++                pluginCommands.add(key);
++            }
++        }
++
++        pluginCommands.sort(String::compareToIgnoreCase);
++
++        sender.sendMessage(Component.text("═══════════════════════════════════════", NamedTextColor.DARK_GRAY));
++        sender.sendMessage(Component.text("Commands registered by ", NamedTextColor.GRAY)
++            .append(Component.text(plugin.getName(), NamedTextColor.GOLD, TextDecoration.BOLD)));
++        sender.sendMessage(Component.text("═══════════════════════════════════════", NamedTextColor.DARK_GRAY));
++
++        if (pluginCommands.isEmpty()) {
++            sender.sendMessage(Component.text("  No commands registered", NamedTextColor.GRAY));
++        } else {
++            for (String cmd : pluginCommands) {
++                sender.sendMessage(Component.text("  /", NamedTextColor.GRAY)
++                    .append(Component.text(cmd, NamedTextColor.AQUA)));
++            }
++        }
++
++        sender.sendMessage(Component.text("═══════════════════════════════════════", NamedTextColor.DARK_GRAY));
++        return true;
++    }
++
++    private boolean executeLookup(CommandSender sender, String[] args) {
++        if (!checkPerm(sender, PermissionNodes.PLUGMAN_LOOKUP)) return true;
++        if (args.length < 2) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Usage: /plugman lookup <command>", NamedTextColor.YELLOW)));
++            return true;
++        }
++
++        String commandName = args[1].toLowerCase();
++        SimpleCommandMap commandMap = ((CraftServer) Bukkit.getServer()).getCommandMap();
++        Map<String, Command> knownCommands = commandMap.getKnownCommands();
++
++        Command cmd = knownCommands.get(commandName);
++        if (cmd == null) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Command not found: ", NamedTextColor.YELLOW))
++                .append(Component.text(commandName, NamedTextColor.GOLD)));
++            return true;
++        }
++
++        if (cmd instanceof PluginCommand pc) {
++            sender.sendMessage(Component.text("Command ", NamedTextColor.GRAY)
++                .append(Component.text("/" + commandName, NamedTextColor.AQUA))
++                .append(Component.text(" is registered by ", NamedTextColor.GRAY))
++                .append(Component.text(pc.getPlugin().getName(), NamedTextColor.GOLD)));
++        } else {
++            // Check for namespace prefix
++            String owner = "Unknown";
++            for (Map.Entry<String, Command> entry : knownCommands.entrySet()) {
++                if (entry.getValue().equals(cmd) && entry.getKey().contains(":")) {
++                    owner = entry.getKey().split(":")[0];
++                    break;
++                }
++            }
++            sender.sendMessage(Component.text("Command ", NamedTextColor.GRAY)
++                .append(Component.text("/" + commandName, NamedTextColor.AQUA))
++                .append(Component.text(" owner: ", NamedTextColor.GRAY))
++                .append(Component.text(owner, NamedTextColor.GOLD)));
++        }
++
++        return true;
++    }
++
++    private boolean executeDump(CommandSender sender) {
++        if (!checkPerm(sender, PermissionNodes.PLUGMAN_DUMP)) return true;
++
++        try {
++            Path dumpFile = Path.of("plugins", "versions.txt");
++            List<String> lines = new ArrayList<>();
++
++            Plugin[] plugins = Bukkit.getPluginManager().getPlugins();
++            Arrays.sort(plugins, Comparator.comparing(Plugin::getName));
++
++            for (Plugin p : plugins) {
++                String status = p.isEnabled() ? "Enabled" : "Disabled";
++                lines.add(p.getName() + " v" + p.getPluginMeta().getVersion() + " - " + status);
++            }
++
++            Files.write(dumpFile, lines);
++
++            sender.sendMessage(Component.text("✓ ", NamedTextColor.GREEN)
++                .append(Component.text("Plugin list exported to ", NamedTextColor.YELLOW))
++                .append(Component.text("plugins/versions.txt", NamedTextColor.GOLD)));
++        } catch (Exception e) {
++            sender.sendMessage(Component.text("✗ ", NamedTextColor.RED)
++                .append(Component.text("Failed to export: ", NamedTextColor.YELLOW))
++                .append(Component.text(e.getMessage(), NamedTextColor.GOLD)));
++        }
++
++        return true;
++    }
++
++    private boolean checkPerm(CommandSender sender, String perm) {
++        if (sender.hasPermission(perm) || sender.hasPermission(PermissionNodes.PLUGMAN)) {
++            return true;
++        }
++        sender.sendMessage(Bukkit.permissionMessage());
++        return false;
++    }
++
++    private List<String> getPluginNames(boolean enabledOnly, String prefix) {
++        return Arrays.stream(Bukkit.getPluginManager().getPlugins())
++            .filter(p -> !enabledOnly || p.isEnabled())
++            .filter(p -> enabledOnly || !p.isEnabled())
++            .map(Plugin::getName)
++            .filter(name -> name.toLowerCase().startsWith(prefix.toLowerCase()))
++            .sorted()
++            .collect(Collectors.toList());
++    }
++
++    private List<String> getAllPluginNames(String prefix) {
++        return Arrays.stream(Bukkit.getPluginManager().getPlugins())
++            .map(Plugin::getName)
++            .filter(name -> name.toLowerCase().startsWith(prefix.toLowerCase()))
++            .sorted()
++            .collect(Collectors.toList());
++    }
++
++    private List<String> getUnloadedJars(String prefix) {
++        File pluginsDir = new File("plugins");
++        if (!pluginsDir.exists() || !pluginsDir.isDirectory()) {
++            return List.of();
++        }
++
++        List<String> loadedJars = Arrays.stream(Bukkit.getPluginManager().getPlugins())
++            .filter(p -> p instanceof JavaPlugin)
++            .map(p -> {
++                try {
++                    java.lang.reflect.Method getFileMethod = JavaPlugin.class.getDeclaredMethod("getFile");
++                    getFileMethod.setAccessible(true);
++                    return ((File) getFileMethod.invoke(p)).getName();
++                } catch (Exception e) {
++                    return null;
++                }
++            })
++            .filter(name -> name != null)
++            .collect(Collectors.toList());
++
++        File[] files = pluginsDir.listFiles((dir, name) -> name.endsWith(".jar"));
++        if (files == null) {
++            return List.of();
++        }
++
++        return Arrays.stream(files)
++            .map(File::getName)
++            .filter(name -> !loadedJars.contains(name))
++            .filter(name -> name.toLowerCase().startsWith(prefix.toLowerCase()))
++            .sorted()
++            .collect(Collectors.toList());
++    }
++
++    private List<String> getCommandNames(String prefix) {
++        SimpleCommandMap commandMap = ((CraftServer) Bukkit.getServer()).getCommandMap();
++        Map<String, Command> knownCommands = commandMap.getKnownCommands();
++
++        return knownCommands.keySet().stream()
++            .filter(key -> !key.contains(":"))
++            .filter(key -> key.toLowerCase().startsWith(prefix.toLowerCase()))
++            .sorted()
++            .collect(Collectors.toList());
++    }
++}

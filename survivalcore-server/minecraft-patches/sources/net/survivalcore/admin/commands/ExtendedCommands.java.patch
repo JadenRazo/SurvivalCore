@@ -1,0 +1,531 @@
+--- /dev/null
++++ b/net/survivalcore/admin/commands/ExtendedCommands.java
+@@ -1,0 +_,528 @@
++package net.survivalcore.admin.commands;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.UUID;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.survivalcore.admin.AdminCommands;
++import net.survivalcore.admin.PermissionNodes;
++import org.bukkit.Bukkit;
++import org.bukkit.Location;
++import org.bukkit.World;
++import org.bukkit.block.Biome;
++import org.bukkit.block.Block;
++import org.bukkit.command.Command;
++import org.bukkit.command.CommandSender;
++import org.bukkit.command.SimpleCommandMap;
++import org.bukkit.entity.Player;
++import org.checkerframework.checker.nullness.qual.NonNull;
++import org.checkerframework.checker.nullness.qual.Nullable;
++
++public final class ExtendedCommands {
++
++    private ExtendedCommands() {}
++
++    public static int register(final SimpleCommandMap map) {
++        map.register("survivalcore", tpposCommand());
++        map.register("survivalcore", tpallCommand());
++        map.register("survivalcore", tpCommand());
++        map.register("survivalcore", coordsCommand());
++        map.register("survivalcore", biomeCommand());
++        map.register("survivalcore", playtimeCommand());
++        map.register("survivalcore", tptoggleCommand());
++        map.register("survivalcore", extCommand());
++        map.register("survivalcore", smiteCommand());
++        return 9;
++    }
++
++    private static Command tpposCommand() {
++        return new Command("tppos", "Teleport to coordinates", "/tppos <x> <y> <z> [world]", List.of()) {
++            {
++                setPermission(PermissionNodes.TPPOS);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                if (args.length < 3) {
++                    sender.sendMessage(
++                        Component.text("Usage: ", NamedTextColor.RED)
++                            .append(Component.text("/tppos <x> <y> <z> [world]", NamedTextColor.GRAY))
++                    );
++                    return true;
++                }
++
++                final double x, y, z;
++                try {
++                    x = Double.parseDouble(args[0]);
++                    y = Double.parseDouble(args[1]);
++                    z = Double.parseDouble(args[2]);
++                } catch (NumberFormatException e) {
++                    sender.sendMessage(Component.text("Invalid coordinates. Use numbers.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final World world;
++                if (args.length > 3) {
++                    world = Bukkit.getWorld(args[3]);
++                    if (world == null) {
++                        sender.sendMessage(
++                            Component.text("World not found: ", NamedTextColor.RED)
++                                .append(Component.text(args[3], NamedTextColor.GOLD))
++                        );
++                        return true;
++                    }
++                } else {
++                    world = player.getWorld();
++                }
++
++                final Location target = new Location(world, x, y, z, player.getLocation().getYaw(), player.getLocation().getPitch());
++                player.teleport(target);
++
++                player.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Teleported to ", NamedTextColor.YELLOW))
++                        .append(Component.text(String.format("%.1f, %.1f, %.1f", x, y, z), NamedTextColor.GOLD))
++                        .append(Component.text(" in ", NamedTextColor.YELLOW))
++                        .append(Component.text(world.getName(), NamedTextColor.GOLD))
++                );
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                if (args.length >= 1 && args.length <= 3) {
++                    return List.of("~");
++                }
++                if (args.length == 4) {
++                    final List<String> worlds = new ArrayList<>();
++                    for (final World w : Bukkit.getWorlds()) {
++                        worlds.add(w.getName());
++                    }
++                    return worlds;
++                }
++                return List.of();
++            }
++        };
++    }
++
++    private static Command tpallCommand() {
++        return new Command("tpall", "Teleport all players to you", "/tpall", List.of()) {
++            {
++                setPermission(PermissionNodes.TPALL);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final Location target = player.getLocation();
++                int count = 0;
++
++                for (final Player online : Bukkit.getOnlinePlayers()) {
++                    if (online.equals(player)) continue;
++                    online.teleport(target);
++                    count++;
++                }
++
++                player.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Teleported ", NamedTextColor.YELLOW))
++                        .append(Component.text(String.valueOf(count), NamedTextColor.GOLD))
++                        .append(Component.text(" players to you.", NamedTextColor.YELLOW))
++                );
++                return true;
++            }
++        };
++    }
++
++    private static Command tpCommand() {
++        return new Command("tp", "Teleport to a player or teleport a player to another", "/tp <player> [target]", List.of()) {
++            {
++                setPermission(PermissionNodes.TP_OTHERS);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (args.length == 0) {
++                    sender.sendMessage(
++                        Component.text("Usage: ", NamedTextColor.RED)
++                            .append(Component.text("/tp <player> [target]", NamedTextColor.GRAY))
++                    );
++                    return true;
++                }
++
++                // One arg: teleport sender to player
++                if (args.length == 1) {
++                    if (!(sender instanceof Player player)) {
++                        sender.sendMessage(Component.text("Specify a target player when using from console.", NamedTextColor.RED));
++                        return true;
++                    }
++
++                    final Player target = Bukkit.getPlayer(args[0]);
++                    if (target == null) {
++                        sender.sendMessage(
++                            Component.text("Player not found: ", NamedTextColor.RED)
++                                .append(Component.text(args[0], NamedTextColor.GOLD))
++                        );
++                        return true;
++                    }
++
++                    // Check tp toggle (admin bypass via permission check)
++                    if (AdminCommands.getTpTogglePlayers().contains(target.getUniqueId()) && !player.hasPermission(PermissionNodes.TP_OTHERS)) {
++                        player.sendMessage(Component.text("That player has teleportation disabled.", NamedTextColor.RED));
++                        return true;
++                    }
++
++                    player.teleport(target);
++                    player.sendMessage(
++                        Component.text("✓ ", NamedTextColor.GREEN)
++                            .append(Component.text("Teleported to ", NamedTextColor.YELLOW))
++                            .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                    );
++                    return true;
++                }
++
++                // Two args: teleport first player to second player
++                final Player first = Bukkit.getPlayer(args[0]);
++                if (first == null) {
++                    sender.sendMessage(
++                        Component.text("Player not found: ", NamedTextColor.RED)
++                            .append(Component.text(args[0], NamedTextColor.GOLD))
++                    );
++                    return true;
++                }
++
++                final Player second = Bukkit.getPlayer(args[1]);
++                if (second == null) {
++                    sender.sendMessage(
++                        Component.text("Player not found: ", NamedTextColor.RED)
++                            .append(Component.text(args[1], NamedTextColor.GOLD))
++                    );
++                    return true;
++                }
++
++                // Check tp toggle (admin bypass via permission check)
++                if (AdminCommands.getTpTogglePlayers().contains(second.getUniqueId()) && !sender.hasPermission(PermissionNodes.TP_OTHERS)) {
++                    sender.sendMessage(Component.text("That player has teleportation disabled.", NamedTextColor.RED));
++                    return true;
++                }
++
++                first.teleport(second);
++                sender.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Teleported ", NamedTextColor.YELLOW))
++                        .append(Component.text(first.getName(), NamedTextColor.GOLD))
++                        .append(Component.text(" to ", NamedTextColor.YELLOW))
++                        .append(Component.text(second.getName(), NamedTextColor.GOLD))
++                );
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                if (args.length == 1 || args.length == 2) {
++                    return PlayerCommands.matchPlayers(args[args.length - 1]);
++                }
++                return List.of();
++            }
++        };
++    }
++
++    private static Command coordsCommand() {
++        return new Command("coords", "Show your current coordinates", "/coords", List.of("getpos", "position")) {
++            {
++                setPermission(PermissionNodes.COORDS);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final Location loc = player.getLocation();
++                final String facing = getFacing(loc.getYaw());
++
++                player.sendMessage(
++                    Component.text("World: ", NamedTextColor.GRAY)
++                        .append(Component.text(loc.getWorld().getName(), NamedTextColor.WHITE))
++                        .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
++                        .append(Component.text("X: ", NamedTextColor.GRAY))
++                        .append(Component.text(String.format("%.1f", loc.getX()), NamedTextColor.WHITE))
++                        .append(Component.text(" Y: ", NamedTextColor.GRAY))
++                        .append(Component.text(String.format("%.1f", loc.getY()), NamedTextColor.WHITE))
++                        .append(Component.text(" Z: ", NamedTextColor.GRAY))
++                        .append(Component.text(String.format("%.1f", loc.getZ()), NamedTextColor.WHITE))
++                        .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
++                        .append(Component.text("Facing: ", NamedTextColor.GRAY))
++                        .append(Component.text(facing, NamedTextColor.WHITE))
++                );
++                return true;
++            }
++        };
++    }
++
++    private static Command biomeCommand() {
++        return new Command("biome", "Show your current biome", "/biome", List.of()) {
++            {
++                setPermission(PermissionNodes.BIOME);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final Biome biome = player.getLocation().getBlock().getBiome();
++                final String biomeName = formatBiomeName(biome.name());
++
++                player.sendMessage(
++                    Component.text("Biome: ", NamedTextColor.GRAY)
++                        .append(Component.text(biomeName, NamedTextColor.GOLD))
++                );
++                return true;
++            }
++        };
++    }
++
++    private static Command playtimeCommand() {
++        return new Command("playtime", "Show session playtime", "/playtime [player]", List.of()) {
++            {
++                setPermission(PermissionNodes.PLAYTIME);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                final Player target;
++                if (args.length > 0) {
++                    target = Bukkit.getPlayer(args[0]);
++                    if (target == null) {
++                        sender.sendMessage(
++                            Component.text("Player not found: ", NamedTextColor.RED)
++                                .append(Component.text(args[0], NamedTextColor.GOLD))
++                        );
++                        return true;
++                    }
++                } else if (sender instanceof Player player) {
++                    target = player;
++                } else {
++                    sender.sendMessage(Component.text("Specify a player when using from console.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final Long joinTime = AdminCommands.getJoinTimes().get(target.getUniqueId());
++                if (joinTime == null) {
++                    sender.sendMessage(Component.text("No playtime data available.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final long duration = System.currentTimeMillis() - joinTime;
++                final String formatted = formatDuration(duration);
++
++                if (target.equals(sender)) {
++                    sender.sendMessage(
++                        Component.text("Session playtime: ", NamedTextColor.GRAY)
++                            .append(Component.text(formatted, NamedTextColor.GOLD))
++                    );
++                } else {
++                    sender.sendMessage(
++                        Component.text(target.getName(), NamedTextColor.GOLD)
++                            .append(Component.text("'s session playtime: ", NamedTextColor.GRAY))
++                            .append(Component.text(formatted, NamedTextColor.GOLD))
++                    );
++                }
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? PlayerCommands.matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    private static Command tptoggleCommand() {
++        return new Command("tptoggle", "Toggle teleportation requests", "/tptoggle", List.of()) {
++            {
++                setPermission(PermissionNodes.TPTOGGLE);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final UUID uuid = player.getUniqueId();
++                final boolean enabled;
++
++                if (AdminCommands.getTpTogglePlayers().contains(uuid)) {
++                    AdminCommands.getTpTogglePlayers().remove(uuid);
++                    enabled = true;
++                } else {
++                    AdminCommands.getTpTogglePlayers().add(uuid);
++                    enabled = false;
++                }
++
++                player.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Teleportation toggled ", NamedTextColor.YELLOW))
++                        .append(Component.text(enabled ? "on" : "off", NamedTextColor.GOLD))
++                        .append(Component.text(".", NamedTextColor.YELLOW))
++                );
++                return true;
++            }
++        };
++    }
++
++    private static Command extCommand() {
++        return new Command("ext", "Extinguish yourself or a target player", "/ext [player]", List.of("extinguish")) {
++            {
++                setPermission(PermissionNodes.EXT);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                final Player target = PlayerCommands.resolveTarget(sender, args);
++                if (target == null) return true;
++
++                target.setFireTicks(0);
++
++                target.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("You have been extinguished.", NamedTextColor.YELLOW))
++                );
++                if (!target.equals(sender)) {
++                    sender.sendMessage(
++                        Component.text("✓ ", NamedTextColor.GREEN)
++                            .append(Component.text("Extinguished ", NamedTextColor.YELLOW))
++                            .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                    );
++                }
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? PlayerCommands.matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    private static Command smiteCommand() {
++        return new Command("smite", "Strike lightning", "/smite [player]", List.of()) {
++            {
++                setPermission(PermissionNodes.SMITE);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final Location strikeLocation;
++
++                if (args.length > 0) {
++                    final Player target = Bukkit.getPlayer(args[0]);
++                    if (target == null) {
++                        sender.sendMessage(
++                            Component.text("Player not found: ", NamedTextColor.RED)
++                                .append(Component.text(args[0], NamedTextColor.GOLD))
++                        );
++                        return true;
++                    }
++                    strikeLocation = target.getLocation();
++                } else {
++                    final Block targetBlock = player.getTargetBlockExact(200);
++                    if (targetBlock == null) {
++                        player.sendMessage(Component.text("No block in sight.", NamedTextColor.RED));
++                        return true;
++                    }
++                    strikeLocation = targetBlock.getLocation();
++                }
++
++                strikeLocation.getWorld().strikeLightning(strikeLocation);
++
++                player.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Lightning strike summoned.", NamedTextColor.YELLOW))
++                );
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? PlayerCommands.matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    // ==================== Helpers ====================
++
++    private static String formatDuration(long millis) {
++        long seconds = millis / 1000;
++        long hours = seconds / 3600;
++        long minutes = (seconds % 3600) / 60;
++        long secs = seconds % 60;
++        if (hours > 0) return hours + "h " + minutes + "m " + secs + "s";
++        if (minutes > 0) return minutes + "m " + secs + "s";
++        return secs + "s";
++    }
++
++    private static String getFacing(float yaw) {
++        // Normalize yaw to 0-360
++        float y = ((yaw % 360) + 360) % 360;
++        if (y >= 337.5 || y < 22.5) return "South";
++        if (y < 67.5) return "Southwest";
++        if (y < 112.5) return "West";
++        if (y < 157.5) return "Northwest";
++        if (y < 202.5) return "North";
++        if (y < 247.5) return "Northeast";
++        if (y < 292.5) return "East";
++        return "Southeast";
++    }
++
++    private static String formatBiomeName(final String name) {
++        final StringBuilder result = new StringBuilder();
++        final String[] words = name.split("_");
++        for (final String word : words) {
++            if (result.length() > 0) result.append(" ");
++            result.append(word.substring(0, 1).toUpperCase());
++            result.append(word.substring(1).toLowerCase());
++        }
++        return result.toString();
++    }
++}

@@ -1,0 +1,440 @@
+--- /dev/null
++++ b/net/survivalcore/admin/commands/StaffCommands.java
+@@ -1,0 +_,437 @@
++package net.survivalcore.admin.commands;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.concurrent.TimeUnit;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.survivalcore.admin.AdminCommands;
++import net.survivalcore.admin.PermissionNodes;
++import org.bukkit.Bukkit;
++import org.bukkit.Location;
++import org.bukkit.command.Command;
++import org.bukkit.command.CommandSender;
++import org.bukkit.command.SimpleCommandMap;
++import org.bukkit.entity.Player;
++import org.checkerframework.checker.nullness.qual.NonNull;
++import org.checkerframework.checker.nullness.qual.Nullable;
++
++public final class StaffCommands {
++
++    private StaffCommands() {}
++
++    public static int register(final SimpleCommandMap map) {
++        map.register("survivalcore", freezeCommand());
++        map.register("survivalcore", staffChatCommand());
++        map.register("survivalcore", nearCommand());
++        map.register("survivalcore", seenCommand());
++        map.register("survivalcore", whoisCommand());
++        map.register("survivalcore", sudoCommand());
++        return 6;
++    }
++
++    private static Command freezeCommand() {
++        return new Command("freeze", "Toggle freeze on a player", "/freeze <player>", List.of()) {
++            {
++                setPermission(PermissionNodes.FREEZE);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (args.length < 1) {
++                    sender.sendMessage(
++                        Component.text("Usage: ", NamedTextColor.RED)
++                            .append(Component.text("/freeze <player>", NamedTextColor.GRAY))
++                    );
++                    return true;
++                }
++
++                final Player target = Bukkit.getPlayer(args[0]);
++                if (target == null) {
++                    sender.sendMessage(
++                        Component.text("Player not found: ", NamedTextColor.RED)
++                            .append(Component.text(args[0], NamedTextColor.GOLD))
++                    );
++                    return true;
++                }
++
++                final boolean frozen;
++                if (AdminCommands.getFrozenPlayers().contains(target.getUniqueId())) {
++                    AdminCommands.getFrozenPlayers().remove(target.getUniqueId());
++                    frozen = false;
++                } else {
++                    AdminCommands.getFrozenPlayers().add(target.getUniqueId());
++                    frozen = true;
++                }
++
++                final String state = frozen ? "frozen" : "unfrozen";
++                target.sendMessage(
++                    Component.text("You have been " + state + ".", NamedTextColor.YELLOW)
++                );
++                sender.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                        .append(Component.text(" is now " + state + ".", NamedTextColor.YELLOW))
++                );
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? PlayerCommands.matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    private static Command staffChatCommand() {
++        return new Command("staffchat", "Toggle staff chat mode", "/staffchat", List.of("schat")) {
++            {
++                setPermission(PermissionNodes.STAFFCHAT);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final boolean toggled;
++                if (AdminCommands.getStaffChatToggled().contains(player.getUniqueId())) {
++                    AdminCommands.getStaffChatToggled().remove(player.getUniqueId());
++                    toggled = false;
++                } else {
++                    AdminCommands.getStaffChatToggled().add(player.getUniqueId());
++                    toggled = true;
++                }
++
++                final String state = toggled ? "enabled" : "disabled";
++                player.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Staff chat mode " + state + ".", NamedTextColor.YELLOW))
++                );
++                return true;
++            }
++        };
++    }
++
++    private static Command nearCommand() {
++        return new Command("near", "Show nearby players", "/near [radius]", List.of()) {
++            {
++                setPermission(PermissionNodes.NEAR);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (!(sender instanceof Player player)) {
++                    sender.sendMessage(Component.text("This command can only be used by players.", NamedTextColor.RED));
++                    return true;
++                }
++
++                final int radius;
++                if (args.length > 0) {
++                    try {
++                        radius = Integer.parseInt(args[0]);
++                        if (radius < 1 || radius > 1000) {
++                            sender.sendMessage(Component.text("Radius must be between 1 and 1000.", NamedTextColor.RED));
++                            return true;
++                        }
++                    } catch (NumberFormatException e) {
++                        sender.sendMessage(Component.text("Invalid radius value.", NamedTextColor.RED));
++                        return true;
++                    }
++                } else {
++                    radius = 200;
++                }
++
++                final Location loc = player.getLocation();
++                final List<Player> nearby = new ArrayList<>(Bukkit.getOnlinePlayers().stream()
++                    .filter(p -> !p.equals(player))
++                    .filter(p -> p.getWorld().equals(player.getWorld()))
++                    .filter(p -> loc.distance(p.getLocation()) <= radius)
++                    .sorted((a, b) -> Double.compare(loc.distance(a.getLocation()), loc.distance(b.getLocation())))
++                    .toList());
++
++                if (nearby.isEmpty()) {
++                    player.sendMessage(
++                        Component.text("No players within ", NamedTextColor.GRAY)
++                            .append(Component.text(radius + " blocks", NamedTextColor.GOLD))
++                    );
++                } else {
++                    player.sendMessage(
++                        Component.text("Players within ", NamedTextColor.GRAY)
++                            .append(Component.text(radius + " blocks:", NamedTextColor.GOLD))
++                    );
++                    for (final Player nearPlayer : nearby) {
++                        final int distance = (int) Math.round(loc.distance(nearPlayer.getLocation()));
++                        player.sendMessage(
++                            Component.text("  • ", NamedTextColor.GRAY)
++                                .append(Component.text(nearPlayer.getName(), NamedTextColor.WHITE))
++                                .append(Component.text(" — ", NamedTextColor.GRAY))
++                                .append(Component.text(distance + " blocks away", NamedTextColor.GOLD))
++                        );
++                    }
++                }
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? List.of("50", "100", "200", "500") : List.of();
++            }
++        };
++    }
++
++    private static Command seenCommand() {
++        return new Command("seen", "Check when a player was last online", "/seen <player>", List.of()) {
++            {
++                setPermission(PermissionNodes.SEEN);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (args.length < 1) {
++                    sender.sendMessage(
++                        Component.text("Usage: ", NamedTextColor.RED)
++                            .append(Component.text("/seen <player>", NamedTextColor.GRAY))
++                    );
++                    return true;
++                }
++
++                final Player online = Bukkit.getPlayer(args[0]);
++                if (online != null && online.isOnline()) {
++                    sender.sendMessage(
++                        Component.text(online.getName(), NamedTextColor.GOLD)
++                            .append(Component.text(" is currently online.", NamedTextColor.GRAY))
++                    );
++                    return true;
++                }
++
++                final String targetName = args[0];
++                Long lastSeenTime = null;
++                String lastSeenName = null;
++
++                for (final var entry : AdminCommands.getLastSeenNames().entrySet()) {
++                    if (entry.getValue().equalsIgnoreCase(targetName)) {
++                        lastSeenName = entry.getValue();
++                        lastSeenTime = AdminCommands.getLastSeen().get(entry.getKey());
++                        break;
++                    }
++                }
++
++                if (lastSeenTime == null || lastSeenName == null) {
++                    sender.sendMessage(
++                        Component.text("No data available for ", NamedTextColor.GRAY)
++                            .append(Component.text(targetName, NamedTextColor.GOLD))
++                    );
++                    return true;
++                }
++
++                final String timeAgo = formatTimeAgo(System.currentTimeMillis() - lastSeenTime);
++                sender.sendMessage(
++                    Component.text(lastSeenName, NamedTextColor.GOLD)
++                        .append(Component.text(" was last seen ", NamedTextColor.GRAY))
++                        .append(Component.text(timeAgo + " ago", NamedTextColor.WHITE))
++                );
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                if (args.length == 1) {
++                    final String lower = args[0].toLowerCase();
++                    return AdminCommands.getLastSeenNames().values().stream()
++                        .filter(name -> name.toLowerCase().startsWith(lower))
++                        .distinct()
++                        .sorted()
++                        .toList();
++                }
++                return List.of();
++            }
++        };
++    }
++
++    private static Command whoisCommand() {
++        return new Command("whois", "Show detailed info about a player", "/whois <player>", List.of()) {
++            {
++                setPermission(PermissionNodes.WHOIS);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (args.length < 1) {
++                    sender.sendMessage(
++                        Component.text("Usage: ", NamedTextColor.RED)
++                            .append(Component.text("/whois <player>", NamedTextColor.GRAY))
++                    );
++                    return true;
++                }
++
++                final Player target = Bukkit.getPlayer(args[0]);
++                if (target == null) {
++                    sender.sendMessage(
++                        Component.text("Player not found: ", NamedTextColor.RED)
++                            .append(Component.text(args[0], NamedTextColor.GOLD))
++                    );
++                    return true;
++                }
++
++                final Location loc = target.getLocation();
++                final String ipAddress = target.getAddress() != null ? target.getAddress().getAddress().getHostAddress() : "Unknown";
++                final boolean godMode = AdminCommands.getGodPlayers().contains(target.getUniqueId());
++                final boolean vanished = AdminCommands.getVanishedPlayers().contains(target.getUniqueId());
++                final boolean frozen = AdminCommands.getFrozenPlayers().contains(target.getUniqueId());
++                final boolean muted = AdminCommands.isMuted(target.getUniqueId());
++
++                sender.sendMessage(
++                    Component.text("─────── ", NamedTextColor.DARK_GRAY)
++                        .append(Component.text("Player Info", NamedTextColor.AQUA))
++                        .append(Component.text(" ───────", NamedTextColor.DARK_GRAY))
++                );
++                sender.sendMessage(
++                    Component.text("Name: ", NamedTextColor.GRAY)
++                        .append(Component.text(target.getName(), NamedTextColor.WHITE))
++                );
++                sender.sendMessage(
++                    Component.text("UUID: ", NamedTextColor.GRAY)
++                        .append(Component.text(target.getUniqueId().toString(), NamedTextColor.WHITE))
++                );
++                sender.sendMessage(
++                    Component.text("IP Address: ", NamedTextColor.GRAY)
++                        .append(Component.text(ipAddress, NamedTextColor.WHITE))
++                );
++                sender.sendMessage(
++                    Component.text("Gamemode: ", NamedTextColor.GRAY)
++                        .append(Component.text(target.getGameMode().name(), NamedTextColor.GOLD))
++                );
++                sender.sendMessage(
++                    Component.text("Health: ", NamedTextColor.GRAY)
++                        .append(Component.text(String.format("%.1f/%.1f", target.getHealth(), target.getMaxHealth()), NamedTextColor.WHITE))
++                );
++                sender.sendMessage(
++                    Component.text("Food Level: ", NamedTextColor.GRAY)
++                        .append(Component.text(target.getFoodLevel() + "/20", NamedTextColor.WHITE))
++                );
++                sender.sendMessage(
++                    Component.text("Location: ", NamedTextColor.GRAY)
++                        .append(Component.text(
++                            String.format("%s %.0f %.0f %.0f", loc.getWorld().getName(), loc.getX(), loc.getY(), loc.getZ()),
++                            NamedTextColor.WHITE
++                        ))
++                );
++                sender.sendMessage(
++                    Component.text("Flying: ", NamedTextColor.GRAY)
++                        .append(Component.text(target.getAllowFlight() ? "Yes" : "No", target.getAllowFlight() ? NamedTextColor.GREEN : NamedTextColor.RED))
++                );
++                sender.sendMessage(
++                    Component.text("God Mode: ", NamedTextColor.GRAY)
++                        .append(Component.text(godMode ? "Yes" : "No", godMode ? NamedTextColor.GREEN : NamedTextColor.RED))
++                );
++                sender.sendMessage(
++                    Component.text("Vanished: ", NamedTextColor.GRAY)
++                        .append(Component.text(vanished ? "Yes" : "No", vanished ? NamedTextColor.GREEN : NamedTextColor.RED))
++                );
++                sender.sendMessage(
++                    Component.text("Frozen: ", NamedTextColor.GRAY)
++                        .append(Component.text(frozen ? "Yes" : "No", frozen ? NamedTextColor.GREEN : NamedTextColor.RED))
++                );
++                sender.sendMessage(
++                    Component.text("Muted: ", NamedTextColor.GRAY)
++                        .append(Component.text(muted ? "Yes" : "No", muted ? NamedTextColor.GREEN : NamedTextColor.RED))
++                );
++                sender.sendMessage(Component.text("─────────────────────────────", NamedTextColor.DARK_GRAY));
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? PlayerCommands.matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    private static Command sudoCommand() {
++        return new Command("sudo", "Force a player to execute a command", "/sudo <player> <command>", List.of()) {
++            {
++                setPermission(PermissionNodes.SUDO);
++            }
++
++            @Override
++            public boolean execute(final @NonNull CommandSender sender, final @NonNull String label, final @NonNull String[] args) {
++                if (!testPermission(sender)) return true;
++
++                if (args.length < 2) {
++                    sender.sendMessage(
++                        Component.text("Usage: ", NamedTextColor.RED)
++                            .append(Component.text("/sudo <player> <command>", NamedTextColor.GRAY))
++                    );
++                    return true;
++                }
++
++                final Player target = Bukkit.getPlayer(args[0]);
++                if (target == null) {
++                    sender.sendMessage(
++                        Component.text("Player not found: ", NamedTextColor.RED)
++                            .append(Component.text(args[0], NamedTextColor.GOLD))
++                    );
++                    return true;
++                }
++
++                final StringBuilder commandBuilder = new StringBuilder();
++                for (int i = 1; i < args.length; i++) {
++                    if (i > 1) commandBuilder.append(" ");
++                    commandBuilder.append(args[i]);
++                }
++                String commandString = commandBuilder.toString();
++
++                if (commandString.startsWith("/")) {
++                    commandString = commandString.substring(1);
++                }
++
++                target.performCommand(commandString);
++                sender.sendMessage(
++                    Component.text("✓ ", NamedTextColor.GREEN)
++                        .append(Component.text("Forced ", NamedTextColor.YELLOW))
++                        .append(Component.text(target.getName(), NamedTextColor.GOLD))
++                        .append(Component.text(" to execute: ", NamedTextColor.YELLOW))
++                        .append(Component.text("/" + commandString, NamedTextColor.GRAY))
++                );
++                return true;
++            }
++
++            @Override
++            public @NonNull List<String> tabComplete(final @NonNull CommandSender sender, final @NonNull String alias, final @NonNull String[] args, final @Nullable Location location) {
++                return args.length == 1 ? PlayerCommands.matchPlayers(args[0]) : List.of();
++            }
++        };
++    }
++
++    // ==================== Helpers ====================
++
++    private static String formatTimeAgo(final long millis) {
++        final long seconds = TimeUnit.MILLISECONDS.toSeconds(millis);
++        final long minutes = TimeUnit.MILLISECONDS.toMinutes(millis);
++        final long hours = TimeUnit.MILLISECONDS.toHours(millis);
++        final long days = TimeUnit.MILLISECONDS.toDays(millis);
++
++        if (days > 0) {
++            return days + " day" + (days == 1 ? "" : "s");
++        } else if (hours > 0) {
++            return hours + " hour" + (hours == 1 ? "" : "s");
++        } else if (minutes > 0) {
++            return minutes + " minute" + (minutes == 1 ? "" : "s");
++        } else {
++            return seconds + " second" + (seconds == 1 ? "" : "s");
++        }
++    }
++}
