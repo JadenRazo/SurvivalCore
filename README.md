@@ -21,6 +21,10 @@ SurvivalCore cherry-picks proven optimizations from Leaf, Gale, Lithium, and Puf
 
 Everything is configurable via `config/survivalcore.yml` with sensible defaults and kill switches.
 
+## Architecture
+
+![Architecture](docs/architecture.svg)
+
 ## Building
 
 Requires Java 21 and Git.

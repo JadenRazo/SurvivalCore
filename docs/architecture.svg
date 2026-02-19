@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" font-family="'Segoe UI', system-ui, -apple-system, sans-serif">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+    <marker id="arrowGreen" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto"><path d="M0,0 L12,5 L0,10 L3,5Z" fill="#4ade80"/></marker>
+    <marker id="arrowBlue" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto"><path d="M0,0 L12,5 L0,10 L3,5Z" fill="#60a5fa"/></marker>
+    <marker id="arrowAmber" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto"><path d="M0,0 L12,5 L0,10 L3,5Z" fill="#fbbf24"/></marker>
+    <marker id="arrowCyan" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto"><path d="M0,0 L12,5 L0,10 L3,5Z" fill="#22d3ee"/></marker>
+    <marker id="arrowPurple" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto"><path d="M0,0 L12,5 L0,10 L3,5Z" fill="#c084fc"/></marker>
+  </defs>
+
+  <rect width="1200" height="900" rx="12" fill="url(#bgGrad)"/>
+
+  <text x="600" y="42" text-anchor="middle" fill="#f0f6fc" font-size="26" font-weight="700">SurvivalCore Architecture</text>
+  <text x="600" y="68" text-anchor="middle" fill="#9198a1" font-size="14">Paper 1.21.8 fork — Cherry-picked optimizations from Leaf, Gale, Lithium, Pufferfish</text>
+
+  <!-- ═══ Patch System ═══ -->
+  <rect x="30" y="90" width="1140" height="100" rx="12" fill="#1c2333" stroke="#60a5fa" stroke-width="2"/>
+  <text x="600" y="118" text-anchor="middle" fill="#93c5fd" font-size="18" font-weight="700">Patch System (paperweight Gradle Plugin)</text>
+
+  <rect x="50" y="132" width="350" height="42" rx="8" fill="#0d1b2a" stroke="#60a5fa" stroke-width="1.2"/>
+  <text x="225" y="159" text-anchor="middle" fill="#93c5fd" font-size="13" font-weight="600">Paper Server Patches</text>
+
+  <rect x="420" y="132" width="350" height="42" rx="8" fill="#0d1b2a" stroke="#60a5fa" stroke-width="1.2"/>
+  <text x="595" y="159" text-anchor="middle" fill="#93c5fd" font-size="13" font-weight="600">Paper API Patches</text>
+
+  <rect x="790" y="132" width="370" height="42" rx="8" fill="#0d1b2a" stroke="#60a5fa" stroke-width="1.2"/>
+  <text x="975" y="159" text-anchor="middle" fill="#93c5fd" font-size="13" font-weight="600">SurvivalCore Source Classes</text>
+
+  <path d="M600,190 L600,220" stroke="#22d3ee" stroke-width="3" marker-end="url(#arrowCyan)" fill="none"/>
+
+  <!-- ═══ Performance Optimizations ═══ -->
+  <rect x="30" y="220" width="1140" height="200" rx="12" fill="#1c2333" stroke="#22d3ee" stroke-width="2"/>
+  <text x="600" y="248" text-anchor="middle" fill="#67e8f9" font-size="18" font-weight="700">Performance Optimizations</text>
+
+  <rect x="50" y="264" width="350" height="140" rx="8" fill="#0e2a32" stroke="#22d3ee" stroke-width="1.2"/>
+  <text x="225" y="288" text-anchor="middle" fill="#67e8f9" font-size="14" font-weight="600">Async Threading</text>
+  <text x="70" y="310" fill="#c9d1d9" font-size="12">Async Entity Tracking — off main thread</text>
+  <text x="70" y="330" fill="#c9d1d9" font-size="12">Async Pathfinding — worker thread pool</text>
+  <text x="70" y="350" fill="#c9d1d9" font-size="12">Async Mob Spawning — position calc async</text>
+  <text x="70" y="370" fill="#c9d1d9" font-size="12">Object Pooling — BlockPos, Vec3, AABB</text>
+  <text x="70" y="390" fill="#c9d1d9" font-size="12">Thread-local pools for hot allocations</text>
+
+  <rect x="420" y="264" width="350" height="140" rx="8" fill="#0e2a32" stroke="#fbbf24" stroke-width="1.2"/>
+  <text x="595" y="288" text-anchor="middle" fill="#fbbf24" font-size="14" font-weight="600">Math Acceleration</text>
+  <text x="440" y="310" fill="#c9d1d9" font-size="12">FastMath — 64K trig lookup tables</text>
+  <text x="440" y="330" fill="#c9d1d9" font-size="12">Bit-manipulation floor/ceil</text>
+  <text x="440" y="350" fill="#c9d1d9" font-size="12">Fast inverse sqrt (Quake III + NR)</text>
+  <text x="440" y="370" fill="#c9d1d9" font-size="12">SIMD — Java Vector API for batching</text>
+  <text x="440" y="390" fill="#c9d1d9" font-size="12">Fast atan2 polynomial approximation</text>
+
+  <rect x="790" y="264" width="370" height="140" rx="8" fill="#0e2a32" stroke="#4ade80" stroke-width="1.2"/>
+  <text x="975" y="288" text-anchor="middle" fill="#86efac" font-size="14" font-weight="600">World Optimizations</text>
+  <text x="810" y="310" fill="#c9d1d9" font-size="12">Hopper — Lithium-style inventory caching</text>
+  <text x="810" y="330" fill="#c9d1d9" font-size="12">Hopper — skip empty slot checks</text>
+  <text x="810" y="350" fill="#c9d1d9" font-size="12">Villager lobotomize (stuck AI disable)</text>
+  <text x="810" y="370" fill="#c9d1d9" font-size="12">Entity AI — distance-based tick frequency</text>
+  <text x="810" y="390" fill="#c9d1d9" font-size="12">Goal selector throttling</text>
+
+  <path d="M600,420 L600,450" stroke="#fbbf24" stroke-width="3" marker-end="url(#arrowAmber)" fill="none"/>
+
+  <!-- ═══ Survival Systems ═══ -->
+  <rect x="30" y="450" width="1140" height="140" rx="12" fill="#1c2333" stroke="#fbbf24" stroke-width="2"/>
+  <text x="600" y="478" text-anchor="middle" fill="#fbbf24" font-size="18" font-weight="700">Runtime Systems</text>
+
+  <rect x="50" y="494" width="350" height="80" rx="8" fill="#292524" stroke="#fbbf24" stroke-width="1.2"/>
+  <text x="225" y="518" text-anchor="middle" fill="#fbbf24" font-size="14" font-weight="600">Entity Tick Budget</text>
+  <text x="70" y="538" fill="#c9d1d9" font-size="12">Per-tick time cap with round-robin fairness</text>
+  <text x="70" y="558" fill="#c9d1d9" font-size="12">Deferred entity tracking across ticks</text>
+
+  <rect x="420" y="494" width="350" height="80" rx="8" fill="#292524" stroke="#fbbf24" stroke-width="1.2"/>
+  <text x="595" y="518" text-anchor="middle" fill="#fbbf24" font-size="14" font-weight="600">Farm Detector</text>
+  <text x="440" y="538" fill="#c9d1d9" font-size="12">Per-chunk entity density tracking</text>
+  <text x="440" y="558" fill="#c9d1d9" font-size="12">3-tier throttling: soft / hard / critical</text>
+
+  <rect x="790" y="494" width="370" height="80" rx="8" fill="#292524" stroke="#fbbf24" stroke-width="1.2"/>
+  <text x="975" y="518" text-anchor="middle" fill="#fbbf24" font-size="14" font-weight="600">Performance Monitor</text>
+  <text x="810" y="538" fill="#c9d1d9" font-size="12">Per-tick timing breakdown</text>
+  <text x="810" y="558" fill="#c9d1d9" font-size="12">Async pool utilization tracking</text>
+
+  <path d="M600,590 L600,620" stroke="#4ade80" stroke-width="3" marker-end="url(#arrowGreen)" fill="none"/>
+
+  <!-- ═══ Configuration ═══ -->
+  <rect x="30" y="620" width="1140" height="80" rx="12" fill="#1c2333" stroke="#4ade80" stroke-width="2"/>
+  <text x="600" y="648" text-anchor="middle" fill="#4ade80" font-size="18" font-weight="700">Configuration</text>
+
+  <rect x="50" y="662" width="530" height="26" rx="6" fill="#1a2e1a" stroke="#4ade80" stroke-width="1"/>
+  <text x="315" y="681" text-anchor="middle" fill="#86efac" font-size="13" font-weight="600">config/survivalcore.yml — all features with kill switches</text>
+
+  <rect x="600" y="662" width="560" height="26" rx="6" fill="#1a2e1a" stroke="#4ade80" stroke-width="1"/>
+  <text x="880" y="681" text-anchor="middle" fill="#86efac" font-size="13" font-weight="600">Sensible defaults — per-feature enable/disable — threshold tuning</text>
+
+  <!-- ═══ Build & Deploy ═══ -->
+  <rect x="30" y="730" width="1140" height="90" rx="12" fill="#1c2333" stroke="#7d8590" stroke-width="1.5"/>
+  <text x="600" y="758" text-anchor="middle" fill="#f0f6fc" font-size="15" font-weight="700">Build &amp; Deploy Pipeline</text>
+
+  <rect x="50" y="772" width="260" height="32" rx="6" fill="#172032"/>
+  <text x="180" y="793" text-anchor="middle" fill="#9198a1" font-size="12" font-weight="600">Validate (applyAllPatches)</text>
+
+  <path d="M320,788 L340,788" stroke="#7d8590" stroke-width="2" marker-end="url(#arrowGreen)" fill="none"/>
+
+  <rect x="350" y="772" width="310" height="32" rx="6" fill="#172032"/>
+  <text x="505" y="793" text-anchor="middle" fill="#9198a1" font-size="12" font-weight="600">Build (createMojmapPaperclipJar)</text>
+
+  <path d="M670,788 L690,788" stroke="#7d8590" stroke-width="2" marker-end="url(#arrowGreen)" fill="none"/>
+
+  <rect x="700" y="772" width="230" height="32" rx="6" fill="#172032"/>
+  <text x="815" y="793" text-anchor="middle" fill="#9198a1" font-size="12" font-weight="600">Deploy (SFTP to server)</text>
+
+  <rect x="950" y="772" width="210" height="32" rx="6" fill="#172032"/>
+  <text x="1055" y="793" text-anchor="middle" fill="#9198a1" font-size="12" font-weight="600">GitLab CI/CD</text>
+
+  <text x="600" y="865" text-anchor="middle" fill="#7d8590" font-size="12">Java 21  ·  Gradle + paperweight  ·  Paper 1.21.8  ·  Bukkit/Spigot/Paper API  ·  GitLab CI  ·  SFTP Deploy</text>
+</svg>
