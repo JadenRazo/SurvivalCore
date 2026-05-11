@@ -8,7 +8,7 @@ variables:
   JAVA_VERSION: "21"
 
 default:
-  image: eclipse-temurin:21.0.11_10-jdk
+  image: eclipse-temurin:25.0.3_9-jdk
   cache:
     key: gradle-cache
     paths:
